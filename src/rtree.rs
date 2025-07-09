@@ -89,6 +89,11 @@ impl RTree {
     pub(crate) fn max_entries_internal(&self) -> usize {
         self.max_entries
     }
+
+    /// 内部方法：获取最小条目数
+    pub(crate) fn min_entries_internal(&self) -> usize {
+        self.min_entries
+    }
 }
 
 #[cfg(test)]

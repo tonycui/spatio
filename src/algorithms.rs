@@ -608,6 +608,7 @@ impl RTree {
 /// 树结构调整算法
 impl RTree {
     /// 计算扩大成本
+    #[allow(dead_code)]
     fn enlargement_cost(&self, mbr: &Rectangle, rect: &Rectangle) -> f64 {
         mbr.enlargement(rect)
     }
@@ -1183,6 +1184,7 @@ mod tests {
     }
 }
 
+#[allow(dead_code)]
 fn print_tree_structure(rtree: &RTree, depth: usize) {
     fn print_node(node: &Node, depth: usize) {
         let indent = "  ".repeat(depth);

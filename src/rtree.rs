@@ -1,5 +1,44 @@
 use crate::rectangle::Rectangle;
-use crate::node::Node;
+use crate::node::{Node, Entry, NodeType};
+use serde::{Deserialize, Serialize};
+
+/// 用于JSON序列化的简化树结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TreeVisualization {
+    /// 根节点（如果存在）
+    pub root: Option<NodeVisualization>,
+    /// 树的配置参数
+    pub config: TreeConfig,
+}
+
+/// 用于JSON序列化的树配置
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TreeConfig {
+    pub max_entries: usize,
+    pub min_entries: usize,
+}
+
+/// 用于JSON序列化的节点结构
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NodeVisualization {
+    /// 节点的最小边界矩形
+    pub mbr: Rectangle,
+    /// 节点类型
+    pub node_type: NodeType,
+    /// 节点层级
+    pub level: usize,
+    /// 数据条目（仅叶子节点）
+    pub data_entries: Vec<DataEntry>,
+    /// 子节点（仅索引节点）
+    pub child_nodes: Vec<NodeVisualization>,
+}
+
+/// 用于JSON序列化的数据条目
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DataEntry {
+    pub mbr: Rectangle,
+    pub data: i32,
+}
 
 /// R-tree主结构
 pub struct RTree {
@@ -94,6 +133,53 @@ impl RTree {
     pub(crate) fn min_entries_internal(&self) -> usize {
         self.min_entries
     }
+
+    /// 导出树结构为JSON格式
+    /// 
+    /// 返回包含完整树结构的JSON字符串，用于前端可视化
+    pub fn export_to_json(&self) -> Result<String, serde_json::Error> {
+        let visualization = self.create_tree_visualization();
+        serde_json::to_string_pretty(&visualization)
+    }
+
+    /// 创建用于可视化的树结构
+    fn create_tree_visualization(&self) -> TreeVisualization {
+        TreeVisualization {
+            root: self.root.as_ref().map(|node| self.create_node_visualization(node)),
+            config: TreeConfig {
+                max_entries: self.max_entries,
+                min_entries: self.min_entries,
+            },
+        }
+    }
+
+    /// 递归创建节点的可视化结构
+    fn create_node_visualization(&self, node: &Node) -> NodeVisualization {
+        let mut data_entries = Vec::new();
+        let mut child_nodes = Vec::new();
+
+        for entry in &node.entries {
+            match entry {
+                Entry::Data { mbr, data } => {
+                    data_entries.push(DataEntry {
+                        mbr: mbr.clone(),
+                        data: *data,
+                    });
+                }
+                Entry::Node { node: child_node, .. } => {
+                    child_nodes.push(self.create_node_visualization(child_node));
+                }
+            }
+        }
+
+        NodeVisualization {
+            mbr: node.mbr.clone(),
+            node_type: node.node_type.clone(),
+            level: node.level,
+            data_entries,
+            child_nodes,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -166,5 +252,48 @@ mod tests {
         println!("Search results: {:?}", results);
         // 暂时注释掉这个断言
         // assert_eq!(results.len(), 10);
+    }
+
+    #[test]
+    fn test_json_export() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入一些测试数据
+        rtree.insert(Rectangle::new(0.0, 0.0, 10.0, 10.0), 1);
+        rtree.insert(Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
+        rtree.insert(Rectangle::new(20.0, 20.0, 30.0, 30.0), 3);
+        
+        // 导出JSON
+        let json = rtree.export_to_json().expect("Failed to export JSON");
+        
+        // 验证JSON包含预期内容
+        assert!(json.contains("\"max_entries\": 4"));
+        assert!(json.contains("\"min_entries\": 2"));
+        assert!(json.contains("\"data\": 1"));
+        assert!(json.contains("\"data\": 2"));
+        assert!(json.contains("\"data\": 3"));
+        
+        println!("Exported JSON:\n{}", json);
+    }
+
+    #[test]
+    fn test_json_export_complex_tree() {
+        let mut rtree = RTree::new(3); // 更小的分支因子，便于创建多层树
+        
+        // 插入足够多的数据来创建多层树结构
+        for i in 0..10 {
+            let x = (i as f64) * 10.0;
+            let y = (i as f64) * 5.0;
+            rtree.insert(Rectangle::new(x, y, x + 5.0, y + 5.0), i);
+        }
+        
+        // 导出JSON
+        let json = rtree.export_to_json().expect("Failed to export JSON");
+        
+        println!("Complex tree JSON:\n{}", json);
+        
+        // 验证树的基本结构
+        assert!(json.contains("\"max_entries\": 3"));
+        assert!(json.contains("\"min_entries\": 1"));
     }
 }

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>R-tree 可视化</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>R-tree 空间索引可视化</h1>
+            <div class="subtitle">实时展示R-tree的结构和空间分布</div>
+        </header>
+
+        <div class="main-content">
+            <!-- 控制面板 -->
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>数据导入</h3>
+                    <div class="data-input">
+                        <label for="json-input">粘贴从Rust导出的JSON数据：</label>
+                        <textarea id="json-input" placeholder="粘贴JSON数据..." rows="8"></textarea>
+                        <button id="load-data-btn" class="btn primary">加载数据</button>
+                        
+                        <div class="example-data-section">
+                            <h4>或选择示例数据：</h4>
+                            <div class="example-buttons">
+                                <button class="btn secondary" data-file="../example_data/simple_tree.json">简单树结构</button>
+                                <button class="btn secondary" data-file="../example_data/uniform_data.json">均匀分布</button>
+                                <button class="btn secondary" data-file="../example_data/complex_tree.json">复杂树结构</button>
+                                <button class="btn secondary" data-file="../example_data/clustered_data.json">聚类分布</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>树配置</h3>
+                    <div class="tree-info" id="tree-info">
+                        <div class="info-item">
+                            <span class="label">最大条目数：</span>
+                            <span class="value" id="max-entries">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">最小条目数：</span>
+                            <span class="value" id="min-entries">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">树深度：</span>
+                            <span class="value" id="tree-depth">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">总节点数：</span>
+                            <span class="value" id="total-nodes">-</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">数据条目数：</span>
+                            <span class="value" id="total-data">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>可视化选项</h3>
+                    <div class="visualization-options">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-mbr" checked>
+                            <span class="checkmark"></span>
+                            显示MBR边界
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-data-points" checked>
+                            <span class="checkmark"></span>
+                            显示数据点
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-node-labels" checked>
+                            <span class="checkmark"></span>
+                            显示节点标签
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-tree-structure" checked>
+                            <span class="checkmark"></span>
+                            显示树状结构
+                        </label>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>视图控制</h3>
+                    <div class="view-controls">
+                        <button id="reset-view-btn" class="btn primary">重置视图</button>
+                        <div class="control-hints">
+                            <p>• 鼠标拖拽：平移视图</p>
+                            <p>• 滚轮：缩放视图</p>
+                            <p>• 方向键：平移视图</p>
+                            <p>• +/-：放大/缩小</p>
+                            <p>• R键：重置视图</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 可视化区域 -->
+            <div class="visualization-area">
+                <!-- 空间视图 -->
+                <div class="spatial-view">
+                    <h3>空间分布视图</h3>
+                    <div class="canvas-container">
+                        <canvas id="spatial-canvas" width="800" height="600"></canvas>
+                        <div class="canvas-overlay" id="spatial-overlay"></div>
+                    </div>
+                </div>
+
+                <!-- 树结构视图 -->
+                <div class="tree-view">
+                    <h3>树结构视图</h3>
+                    <div class="tree-container">
+                        <div id="tree-structure" class="tree-structure">
+                            <div class="placeholder">请加载JSON数据以查看树结构</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div class="status-bar">
+            <div class="status-item">
+                <span id="status-text">就绪</span>
+            </div>
+            <div class="status-item">
+                <span id="coordinates-display">坐标: -</span>
+            </div>
+            <div class="status-item">
+                <span id="zoom-display">缩放: 100%</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="rtree-visualizer.js"></script>
+</body>
+</html>

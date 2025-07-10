@@ -1,9 +1,10 @@
 use crate::rectangle::Rectangle;
+use serde::{Deserialize, Serialize};
 
 /// R-tree节点类型
 /// 
 /// 用于明确区分R-tree中的两种节点类型，避免概念混淆
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum NodeType {
     /// 叶子节点：包含用户插入的真实数据条目
     /// 这些节点位于R-tree的叶子层，直接存储用户数据

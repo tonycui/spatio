@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// 矩形边界框 - 用于表示R-tree中的最小边界矩形(MBR)
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Rectangle {
     pub min: [f64; 2],  // [x_min, y_min]
     pub max: [f64; 2],  // [x_max, y_max]

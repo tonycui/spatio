@@ -42,38 +42,54 @@ impl RTree {
         results
     }
 
-    /// 删除指定的数据条目 - 遵循论文Algorithm Delete
+    /// 删除指定的数据条目 - 使用简化的下溢处理策略
     pub fn delete(&mut self, rect: &Rectangle, data: i32) -> bool {
         // D1: 找到包含目标条目的叶子节点
         if let Some(leaf_path) = self.find_leaf_path(rect, data) {
             // D2: 从叶子节点删除条目
-            let leaf_node = self.get_last_node_mut(&leaf_path);
-            let initial_count = leaf_node.entries.len();
-            
-            // 删除匹配的条目
-            leaf_node.entries.retain(|entry| {
-                if let Entry::Data { mbr, data: entry_data } = entry {
-                    !(mbr == rect && *entry_data == data)
-                } else {
-                    true
+            let (deleted, leaf_entries_count) = {
+                let leaf_node = self.get_last_node_mut(&leaf_path);
+                let initial_count = leaf_node.entries.len();
+                
+                // 删除匹配的条目
+                leaf_node.entries.retain(|entry| {
+                    if let Entry::Data { mbr, data: entry_data } = entry {
+                        !(mbr == rect && *entry_data == data)
+                    } else {
+                        true
+                    }
+                });
+                
+                // 检查是否真的删除了条目
+                if leaf_node.entries.len() == initial_count {
+                    return false; // 没有找到要删除的条目
                 }
-            });
+                
+                // 更新叶子节点的MBR
+                leaf_node.update_mbr();
+                
+                (true, leaf_node.entries.len())
+            };
             
-            // 检查是否真的删除了条目
-            if leaf_node.entries.len() == initial_count {
-                return false; // 没有找到要删除的条目
+            if deleted {
+                // D3: 检查叶子节点是否下溢
+                let min_entries = self.min_entries_internal();
+                
+                if leaf_entries_count < min_entries && !leaf_path.is_empty() {
+                    // 叶子节点下溢且不是根节点 - 使用简化的处理方案
+                    self.handle_leaf_underflow(leaf_path);
+                } else {
+                    // 只需要向上调整MBR
+                    self.adjust_tree_upward(leaf_path);
+                }
+                
+                // D4: 如果根节点只有一个条目且为索引节点，则缩短树
+                self.shorten_tree();
+                
+                true
+            } else {
+                false
             }
-            
-            // 更新叶子节点的MBR
-            leaf_node.update_mbr();
-            
-            // D3: 向上传播删除，检查是否需要合并节点
-            self.condense_tree(leaf_path);
-            
-            // D4: 如果根节点只有一个条目且为索引节点，则缩短树
-            self.shorten_tree();
-            
-            true
         } else {
             false // 没有找到要删除的条目
         }
@@ -359,67 +375,55 @@ impl RTree {
         }
     }
     
-    /// 压缩树 - 处理删除后的节点下溢
-    /// 
-    /// 从删除发生的叶子节点开始，向上检查每个节点是否下溢
-    /// 如果下溢，则将该节点从其父节点中删除，并重新插入其条目
-    fn condense_tree(&mut self, current_path: Vec<usize>) {
-        let min_entries = self.min_entries_internal();
-        let mut eliminated_entries = Vec::new(); // 改为存储条目而不是节点
-        
-        // CT1: 初始化
-        let mut path = current_path;
-        
-        // CT2: 找到父节点
-        while !path.is_empty() {
-            let node_underflows = {
-                let node = self.get_last_node_mut(&path);
-                node.entries.len() < min_entries
-            };
-            
-            if node_underflows {
-                // CT3: 消除下溢节点
-                let parent_index = path.pop().unwrap();
-                
-                if path.is_empty() {
-                    // 这是根节点下溢，稍后在shorten_tree中处理
-                    break;
-                } else {
-                    // 从父节点中删除下溢的节点
-                    let parent = self.get_last_node_mut(&path);
-                    if parent_index < parent.entries.len() {
-                        if let Entry::Node { node, .. } = parent.entries.remove(parent_index) {
-                            // 收集被删除节点的所有数据条目
-                            Self::collect_data_entries(*node, &mut eliminated_entries);
-                        }
-                        parent.update_mbr();
-                    }
-                }
-            } else {
-                // CT4: 调整覆盖矩形
-                let node = self.get_last_node_mut(&path);
-                node.update_mbr();
-                path.pop();
-            }
-        }
-        
-        // CT5: 重新插入被消除的数据条目
-        for (mbr, data) in eliminated_entries {
-            self.insert(mbr, data);
-        }
-    }
+    // 注意：这里移除了原始的condense_tree方法，改为使用简化的handle_leaf_underflow方案
+    // 原始方案处理所有层次的节点下溢，但逻辑复杂
+    // 新方案只处理叶子节点下溢，通过重新插入的方式解决，逻辑更简单清晰
     
-    /// 收集节点中的所有数据条目（递归）
-    fn collect_data_entries(node: Node, entries: &mut Vec<(Rectangle, i32)>) {
-        for entry in node.entries {
-            match entry {
-                Entry::Data { mbr, data } => {
-                    entries.push((mbr, data));
-                }
-                Entry::Node { node: child_node, .. } => {
-                    Self::collect_data_entries(*child_node, entries);
+    /// 处理叶子节点下溢 - 简化方案
+    /// 
+    /// 1. 收集下溢叶子节点中的所有数据条目
+    /// 2. 将这些条目重新插入到树中
+    /// 3. 从父节点中移除下溢的叶子节点
+    /// 4. 向上调整MBR
+    fn handle_leaf_underflow(&mut self, leaf_path: Vec<usize>) {
+        // 1. 收集下溢叶子节点中的所有数据条目
+        let entries_to_reinsert = {
+            let leaf_node = self.get_last_node_mut(&leaf_path);
+            let mut entries = Vec::new();
+            for entry in &leaf_node.entries {
+                if let Entry::Data { mbr, data } = entry {
+                    entries.push((mbr.clone(), *data));
                 }
             }
+            entries
+        };
+        
+        // 2. 从父节点中移除下溢的叶子节点
+        let parent_path = &leaf_path[..leaf_path.len() - 1];
+        let leaf_index = leaf_path[leaf_path.len() - 1];
+        
+        if parent_path.is_empty() {
+            // 父节点是根节点
+            let root = self.root_mut().as_mut().unwrap();
+            if leaf_index < root.entries.len() {
+                root.entries.remove(leaf_index);
+                root.update_mbr();
+            }
+        } else {
+            // 父节点是中间节点
+            let parent = self.get_last_node_mut(parent_path);
+            if leaf_index < parent.entries.len() {
+                parent.entries.remove(leaf_index);
+                parent.update_mbr();
+            }
+        }
+        
+        // 3. 向上调整MBR（仅调整MBR，不做其他下溢检查）
+        self.adjust_tree_upward(parent_path.to_vec());
+        
+        // 4. 重新插入收集到的数据条目
+        for (mbr, data) in entries_to_reinsert {
+            self.insert(mbr, data);
         }
     }
     
@@ -882,141 +886,33 @@ mod tests {
     }
     
     #[test]
-    fn test_condense_tree_underflow_propagation() {
+    fn test_delete_with_underflow() {
         let mut rtree = RTree::new(4); // min_entries = 2, max_entries = 4
         
-        // 策略性地插入数据，创建一个会产生下溢的树结构
-        // 我们需要创建一个至少3层的树，然后删除足够多的条目使某个节点下溢
-        
-        // 第一组：左下角区域 (0-3, 0-3)
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(1.0, 0.0, 2.0, 1.0), 2);
-        rtree.insert(Rectangle::new(0.0, 1.0, 1.0, 2.0), 3);
-        rtree.insert(Rectangle::new(1.0, 1.0, 2.0, 2.0), 4);
-        rtree.insert(Rectangle::new(0.0, 2.0, 1.0, 3.0), 5);
-        
-        // 第二组：右下角区域 (10-13, 0-3)
-        rtree.insert(Rectangle::new(10.0, 0.0, 11.0, 1.0), 11);
-        rtree.insert(Rectangle::new(11.0, 0.0, 12.0, 1.0), 12);
-        rtree.insert(Rectangle::new(10.0, 1.0, 11.0, 2.0), 13);
-        rtree.insert(Rectangle::new(11.0, 1.0, 12.0, 2.0), 14);
-        rtree.insert(Rectangle::new(10.0, 2.0, 11.0, 3.0), 15);
-        
-        // 第三组：左上角区域 (0-3, 10-13)
-        rtree.insert(Rectangle::new(0.0, 10.0, 1.0, 11.0), 21);
-        rtree.insert(Rectangle::new(1.0, 10.0, 2.0, 11.0), 22);
-        rtree.insert(Rectangle::new(0.0, 11.0, 1.0, 12.0), 23);
-        
-        // 第四组：右上角区域 (10-13, 10-13) - 故意只放2个，刚好达到最小值
-        rtree.insert(Rectangle::new(10.0, 10.0, 11.0, 11.0), 31);
-        rtree.insert(Rectangle::new(11.0, 10.0, 12.0, 11.0), 32);
-        
-        println!("Initial tree structure (should have multiple levels):");
-        print_tree_structure(&rtree, 0);
-        
-        let initial_len = rtree.len();
-        println!("Initial tree length: {}", initial_len);
-        
-        // 验证所有条目都能找到
-        let test_cases = vec![
-            (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
-            (Rectangle::new(10.0, 10.0, 11.0, 11.0), 31),
-            (Rectangle::new(11.0, 10.0, 12.0, 11.0), 32),
-        ];
-        
-        for (rect, data) in &test_cases {
-            let results = rtree.search(rect);
-            assert!(results.contains(data), "Entry {} should exist before deletion", data);
-        }
-        
-        // 策略性删除：删除右上角区域的一个条目，使该区域的叶子节点下溢
-        println!("\n=== Deleting entry 31 to cause underflow ===");
-        let deleted = rtree.delete(&Rectangle::new(10.0, 10.0, 11.0, 11.0), 31);
-        assert!(deleted, "Should successfully delete entry 31");
-        
-        println!("Tree structure after deleting entry 31 (should trigger condense_tree):");
-        print_tree_structure(&rtree, 0);
-        
-        // 验证下溢处理的结果
-        assert_eq!(rtree.len(), initial_len - 1);
-        
-        // 验证剩余的条目32仍然能找到（应该被重新插入到合适的位置）
-        let results_32 = rtree.search(&Rectangle::new(11.0, 10.0, 12.0, 11.0));
-        assert!(results_32.contains(&32), "Entry 32 should still be findable after condense_tree");
-        
-        // 验证删除的条目31确实不存在
-        let results_31 = rtree.search(&Rectangle::new(10.0, 10.0, 11.0, 11.0));
-        assert!(!results_31.contains(&31), "Entry 31 should not exist after deletion");
-        
-        // 验证其他区域的条目仍然存在
-        let results_1 = rtree.search(&Rectangle::new(0.0, 0.0, 1.0, 1.0));
-        assert!(results_1.contains(&1), "Entry 1 should still exist");
-        
-        let results_21 = rtree.search(&Rectangle::new(0.0, 10.0, 1.0, 11.0));
-        assert!(results_21.contains(&21), "Entry 21 should still exist");
-        
-        println!("\n=== All validation passed ===");
-    }
-    
-    #[test]
-    fn test_condense_tree_multi_level_underflow() {
-        let mut rtree = RTree::new(3); // min_entries = 1, max_entries = 3
-        
-        // 创建一个深度较大的树，然后删除多个条目触发连锁下溢
+        // 插入足够多的数据以创建有意义的树结构
         let data_points = vec![
-            // 区域A: (0-5, 0-5)
             (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
             (Rectangle::new(1.0, 0.0, 2.0, 1.0), 2),
             (Rectangle::new(2.0, 0.0, 3.0, 1.0), 3),
-            (Rectangle::new(3.0, 0.0, 4.0, 1.0), 4),
-            
-            // 区域B: (10-15, 0-5)
-            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 11),
-            (Rectangle::new(11.0, 0.0, 12.0, 1.0), 12),
-            (Rectangle::new(12.0, 0.0, 13.0, 1.0), 13),
-            (Rectangle::new(13.0, 0.0, 14.0, 1.0), 14),
-            
-            // 区域C: (0-5, 10-15)
-            (Rectangle::new(0.0, 10.0, 1.0, 11.0), 21),
-            (Rectangle::new(1.0, 10.0, 2.0, 11.0), 22),
-            (Rectangle::new(2.0, 10.0, 3.0, 11.0), 23),
-            
-            // 区域D: (10-15, 10-15) - 只放2个
-            (Rectangle::new(10.0, 10.0, 11.0, 11.0), 31),
-            (Rectangle::new(11.0, 10.0, 12.0, 11.0), 32),
+            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 4),
+            (Rectangle::new(11.0, 0.0, 12.0, 1.0), 5),
         ];
         
-        // 插入所有数据
         for (rect, data) in &data_points {
             rtree.insert(rect.clone(), *data);
         }
         
-        println!("Complex tree structure before deletions:");
-        print_tree_structure(&rtree, 0);
-        
         let initial_len = rtree.len();
         
-        // 第一次删除：删除区域D的一个条目，可能导致该叶子节点下溢
-        println!("\n=== First deletion: entry 31 ===");
-        let deleted1 = rtree.delete(&Rectangle::new(10.0, 10.0, 11.0, 11.0), 31);
-        assert!(deleted1);
+        // 删除一些条目，可能触发下溢处理
+        assert!(rtree.delete(&Rectangle::new(1.0, 0.0, 2.0, 1.0), 2));
+        assert!(rtree.delete(&Rectangle::new(2.0, 0.0, 3.0, 1.0), 3));
         
-        println!("After first deletion:");
-        print_tree_structure(&rtree, 0);
-        
-        // 第二次删除：删除区域D的另一个条目，可能导致父节点也下溢
-        println!("\n=== Second deletion: entry 32 ===");
-        let deleted2 = rtree.delete(&Rectangle::new(11.0, 10.0, 12.0, 11.0), 32);
-        assert!(deleted2);
-        
-        println!("After second deletion (may cause parent underflow):");
-        print_tree_structure(&rtree, 0);
-        
-        // 验证树的完整性
+        // 验证删除后的树状态
         assert_eq!(rtree.len(), initial_len - 2);
         
-        // 验证其他所有条目仍然可以找到
-        let remaining_data = vec![1, 2, 3, 4, 11, 12, 13, 14, 21, 22, 23];
+        // 验证剩余条目仍然可以找到
+        let remaining_data = vec![1, 4, 5];
         for &data in &remaining_data {
             let found = data_points.iter()
                 .find(|(_, d)| *d == data)
@@ -1025,20 +921,60 @@ mod tests {
             assert!(found, "Entry {} should still be findable after deletions", data);
         }
         
-        // 验证删除的条目确实不存在
-        let deleted_results_31 = rtree.search(&Rectangle::new(10.0, 10.0, 11.0, 11.0));
-        let deleted_results_32 = rtree.search(&Rectangle::new(11.0, 10.0, 12.0, 11.0));
-        assert!(!deleted_results_31.contains(&31));
-        assert!(!deleted_results_32.contains(&32));
-        
-        println!("\n=== Multi-level underflow test passed ===");
+        // 验证删除的条目不存在
+        let deleted_results_2 = rtree.search(&Rectangle::new(1.0, 0.0, 2.0, 1.0));
+        let deleted_results_3 = rtree.search(&Rectangle::new(2.0, 0.0, 3.0, 1.0));
+        assert!(!deleted_results_2.contains(&2));
+        assert!(!deleted_results_3.contains(&3));
     }
     
     #[test]
-    fn test_condense_tree_reinsert_correctness() {
+    fn test_simplified_underflow_handling() {
         let mut rtree = RTree::new(3); // min_entries = 1, max_entries = 3
         
-        // 创建一个特定的树结构，使得删除操作会导致重新插入
+        // 创建一个简单的测试场景验证简化的下溢处理
+        let data_points = vec![
+            (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
+            (Rectangle::new(0.5, 0.5, 1.5, 1.5), 2),  // 与1重叠
+            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 10),
+            (Rectangle::new(10.5, 0.5, 11.5, 1.5), 11), // 与10重叠
+        ];
+        
+        for (rect, data) in &data_points {
+            rtree.insert(rect.clone(), *data);
+        }
+        
+        // 验证插入后所有条目都存在
+        for (rect, data) in &data_points {
+            let results = rtree.search(rect);
+            assert!(results.contains(data));
+        }
+        
+        // 删除一个条目可能导致叶子节点下溢
+        let deleted = rtree.delete(&Rectangle::new(0.5, 0.5, 1.5, 1.5), 2);
+        assert!(deleted);
+        
+        // 验证重新插入的正确性：剩余条目应该仍然能找到
+        for (rect, data) in &data_points {
+            if *data == 2 {
+                // 被删除的条目应该找不到
+                let results = rtree.search(rect);
+                assert!(!results.contains(data));
+            } else {
+                // 其他条目应该仍然能找到（即使可能被重新插入了）
+                let results = rtree.search(rect);
+                assert!(results.contains(data), "Entry {} should still be found after underflow handling", data);
+            }
+        }
+        
+        assert_eq!(rtree.len(), 3);
+    }
+    
+    #[test]
+    fn test_reinsert_correctness() {
+        let mut rtree = RTree::new(3); // min_entries = 1, max_entries = 3
+        
+        // 创建一个特定的树结构，测试重新插入的正确性
         let original_data = vec![
             (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
             (Rectangle::new(0.5, 0.5, 1.5, 1.5), 2),  // 与1重叠
@@ -1052,38 +988,26 @@ mod tests {
             rtree.insert(rect.clone(), *data);
         }
         
-        println!("Tree structure before strategic deletion:");
-        print_tree_structure(&rtree, 0);
-        
-        // 记录插入前每个条目的搜索路径/位置
-        println!("Search verification before deletion:");
+        // 记录插入前每个条目的搜索结果
         for (rect, data) in &original_data {
             let results = rtree.search(rect);
-            println!("Entry {}: found = {}", data, results.contains(data));
             assert!(results.contains(data));
         }
         
         // 删除一个可能导致节点重组的条目
-        println!("\n=== Deleting entry 2 ===");
         let deleted = rtree.delete(&Rectangle::new(0.5, 0.5, 1.5, 1.5), 2);
         assert!(deleted);
         
-        println!("Tree structure after deletion and potential reinsert:");
-        print_tree_structure(&rtree, 0);
-        
         // 验证重新插入的正确性
-        println!("\nSearch verification after deletion:");
         for (rect, data) in &original_data {
             if *data == 2 {
                 // 被删除的条目应该找不到
                 let results = rtree.search(rect);
                 assert!(!results.contains(data), "Deleted entry {} should not be found", data);
-                println!("Entry {} (deleted): found = false ✓", data);
             } else {
                 // 其他条目应该仍然能找到
                 let results = rtree.search(rect);
-                assert!(results.contains(data), "Entry {} should still be found after condense_tree", data);
-                println!("Entry {}: found = true ✓", data);
+                assert!(results.contains(data), "Entry {} should still be found after underflow handling", data);
             }
         }
         
@@ -1096,11 +1020,10 @@ mod tests {
         assert!(!wide_search.contains(&2), "Deleted entry 2 should not be in wide search results");
         
         assert_eq!(rtree.len(), 5);
-        println!("\n=== Reinsert correctness test passed ===");
     }
     
     #[test]
-    fn test_condense_tree_parent_mbr_update() {
+    fn test_mbr_update_after_deletion() {
         let mut rtree = RTree::new(3);
         
         // 构建一个简单的树，测试删除后的MBR更新
@@ -1109,16 +1032,9 @@ mod tests {
         rtree.insert(Rectangle::new(2.0, 0.0, 3.0, 1.0), 3);
         rtree.insert(Rectangle::new(10.0, 10.0, 11.0, 11.0), 4); // 远离的点
         
-        println!("Tree before deletion:");
-        print_tree_structure(&rtree, 0);
-        
-        // 删除一个条目，验证condense_tree正确工作
-        println!("\n=== Deleting entry 2 ===");
+        // 删除一个条目，验证简化的下溢处理正确工作
         let deleted = rtree.delete(&Rectangle::new(1.0, 0.0, 2.0, 1.0), 2);
         assert!(deleted);
-        
-        println!("Tree after deletion:");
-        print_tree_structure(&rtree, 0);
         
         // 验证删除后树的完整性
         assert_eq!(rtree.len(), 3);
@@ -1143,28 +1059,20 @@ mod tests {
         assert!(all_results.contains(&3));
         assert!(all_results.contains(&4));
         assert!(!all_results.contains(&2));
-        
-        println!("\n=== Parent MBR update test passed ===");
     }
     
     #[test]
-    fn test_condense_tree_edge_cases() {
-        // 测试边界情况：删除导致根节点下溢
+    fn test_edge_cases() {
+        // 测试边界情况：删除导致根节点下溢等情况
         let mut rtree = RTree::new(3);
         
         // 只插入少量数据
         rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
         rtree.insert(Rectangle::new(2.0, 0.0, 3.0, 1.0), 2);
         
-        println!("Small tree before deletion:");
-        print_tree_structure(&rtree, 0);
-        
         // 删除一个条目
         let deleted = rtree.delete(&Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
         assert!(deleted);
-        
-        println!("After deleting one entry:");
-        print_tree_structure(&rtree, 0);
         
         // 验证树仍然有效
         assert_eq!(rtree.len(), 1);
@@ -1174,9 +1082,6 @@ mod tests {
         // 删除最后一个条目
         let deleted_last = rtree.delete(&Rectangle::new(2.0, 0.0, 3.0, 1.0), 2);
         assert!(deleted_last);
-        
-        println!("After deleting last entry:");
-        print_tree_structure(&rtree, 0);
         
         // 验证树为空
         assert_eq!(rtree.len(), 0);

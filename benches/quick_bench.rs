@@ -11,56 +11,7 @@ const QUICK_TEST_SIZE: usize = 10_000;
 const FULL_TEST_SIZE: usize = 100_000;
 
 fn main() {
-//     println!("🚀 R-tree 快速性能测试");
-//     println!("{}", "=".repeat(50));
-    
-//     // 只运行删除全部测试来调试问题
-//     debug_remove_all_issue();
-// }
 
-// fn debug_remove_all_issue() {
-//     println!("🐛 调试删除全部问题");
-    
-//     let config = BenchConfig {
-//         size: 1000, // 使用较小的数据集便于调试
-//         max_entries: 16,
-//         seed: 42,
-//     };
-    
-//     let test_data = generate_test_data(config.size, config.seed);
-    
-//     // 先插入所有数据
-//     let mut rtree = RTree::new(config.max_entries);
-//     for (rect, data) in &test_data {
-//         rtree.insert(rect.clone(), *data);
-//     }
-    
-//     println!("插入完成，开始删除...");
-    
-//     // 逐个删除并观察问题
-//     for (i, (rect, data)) in test_data.iter().enumerate() {
-//         println!("删除第 {} 个条目: {}", i + 1, data);
-//         let success = rtree.delete(rect, *data);
-//         if !success {
-//             println!("❌ 删除失败！");
-//             break;
-//         }
-        
-//         // 每100个条目打印一次状态
-//         if (i + 1) % 100 == 0 {
-//             println!("✅ 已删除 {} 个条目，剩余 {}", i + 1, rtree.len());
-//         }
-        
-//         // 如果接近出错，更频繁地检查
-//         if i > config.size - 50 {
-//             println!("剩余条目: {}", rtree.len());
-//         }
-//     }
-    
-//     println!("删除完成！");
-// }
-
-// fn old_main() {
     println!("🚀 R-tree 快速性能测试");
     println!("{}", "=".repeat(50));
     

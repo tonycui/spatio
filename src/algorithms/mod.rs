@@ -3,6 +3,7 @@
 
 pub mod search;
 pub mod insert;
+pub mod split;
 
 // 临时包含原始algorithms文件的其余功能
 // 这些功能将在后续步骤中逐步迁移到专门的模块中

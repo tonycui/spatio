@@ -888,7 +888,7 @@ impl RTree {
 }
 
 impl RTree {
-
+    #[allow(dead_code)]
     /// 打印完整的树结构用于调试 - 静态方法版本
     fn print_tree_structure_debug(&self) {
         fn print_node_recursive(node: &Node, depth: usize, path: String) {

@@ -4,12 +4,13 @@
 //! 当前测试规模：100,000 条目
 //! 未来扩展：1,000,000 条目
 
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{criterion_group, criterion_main, Criterion};
 use rtree::{RTree, Rectangle};
 use rand::{Rng, SeedableRng};
 use rand::rngs::StdRng;
 
 const BENCHMARK_SIZE: usize = 100_000;  // 当前基准测试大小
+#[allow(dead_code)]
 const FUTURE_SIZE: usize = 1_000_000;   // 未来目标大小
 
 /// 性能测试配置

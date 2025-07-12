@@ -19,7 +19,13 @@ impl RTree {
         
         // I3: 添加记录到叶子节点
         let max_entries = self.max_entries_internal();
-        let leaf_node = self.get_last_node_mut(&leaf_path);
+        let leaf_node = match self.get_last_node_mut(&leaf_path) {
+            Some(node) => node,
+            None => {
+                // 如果无法获取叶子节点，说明路径有问题，这是一个严重的错误
+                panic!("Failed to get leaf node during insertion");
+            }
+        };
         leaf_node.add_entry(Entry::Data { mbr: rect, data });
         
         // I4: 检查是否需要分裂并调整树
@@ -44,11 +50,25 @@ impl RTree {
 
     /// 删除指定的数据条目 - 使用简化的下溢处理策略
     pub fn delete(&mut self, rect: &Rectangle, data: i32) -> bool {
+        // // test
+        // if data == 953 || data == 953 || data == 953 {
+        //     println!("Debug: Attempting to delete data {}", data);
+        //     println!("\n=== COMPLETE TREE STRUCTURE ===");
+        //     Self::print_tree_structure_debug(self);
+        // }
+
+
         // D1: 找到包含目标条目的叶子节点
         if let Some(leaf_path) = self.find_leaf_path(rect, data) {
             // D2: 从叶子节点删除条目
             let (deleted, leaf_entries_count) = {
-                let leaf_node = self.get_last_node_mut(&leaf_path);
+                let leaf_node = match self.get_last_node_mut(&leaf_path) {
+                    Some(node) => node,
+                    None => {
+                        println!("Warning: Failed to get leaf node during deletion");
+                        return false;
+                    }
+                };
                 let initial_count = leaf_node.entries.len();
                 
                 // 删除匹配的条目
@@ -67,17 +87,43 @@ impl RTree {
                 
                 // 更新叶子节点的MBR
                 leaf_node.update_mbr();
+
+                // // for test
+                // println!("leaf_node:{:#?}",leaf_node);
                 
                 (true, leaf_node.entries.len())
             };
+            // if data == 953 {
+            //     println!("Debug: Deleted data {}, leaf entries count: {}", data, leaf_entries_count);
+            // }
             
             if deleted {
                 // D3: 检查叶子节点是否下溢
                 let min_entries = self.min_entries_internal();
+
+                // // for test
+                // println!("leaf_path:{:#?}, leaf_entries_count:{leaf_entries_count}",leaf_path);
                 
                 if leaf_entries_count < min_entries && !leaf_path.is_empty() {
                     // 叶子节点下溢且不是根节点 - 使用简化的处理方案
-                    self.handle_leaf_underflow(leaf_path);
+                    // println!("Before handle_leaf_underflow");
+                    self.handle_leaf_underflow(leaf_path.clone());
+                    // for test
+                    // println!("After handle_leaf_underflow,Complete R-tree structure:");
+                    // Self::print_tree_structure_debug(self);
+
+                    // let parent_path = &leaf_path[..leaf_path.len() - 1];
+                    // let parent_path = &leaf_path[..leaf_path.len() - 1];
+                    // let parent = self.get_last_node_mut(parent_path);
+                    // if parent.entries.is_empty() {
+                    //     // 父节点也变空了，递归处理父节点
+                    //     self.remove_empty_nodes(parent_path.to_vec());
+                    // } else {
+                    //     // 父节点不为空，向上调整MBR
+                    //     // 因为在handle_leaf_underflow里面已经adjust_tree_upward，这里
+                    //     // 暂时先注释掉
+                    //     // self.adjust_tree_upward(parent_path);
+                    // }
                 } else {
                     // 只需要向上调整MBR
                     self.adjust_tree_upward(leaf_path);
@@ -112,7 +158,57 @@ impl RTree {
             if let Some(Entry::Node { node, .. }) = current.entries.get(best_index) {
                 current = node;
             } else {
-                panic!("Expected child entry");
+                // // 添加详细的调试信息
+                // println!("=== PANIC DEBUG INFO ===");
+                // println!("Current node details:");
+                // println!("  Level: {}", current.level);
+                // println!("  Type: {:?}", current.node_type);
+                // println!("  MBR: [{},{},{},{}]", 
+                //     current.mbr.min[0], current.mbr.min[1], 
+                //     current.mbr.max[0], current.mbr.max[1]);
+                // println!("  Total entries: {}", current.entries.len());
+                // println!("  Best index chosen: {}", best_index);
+                
+                // println!("\nAll entries in current node:");
+                // for (i, entry) in current.entries.iter().enumerate() {
+                //     match entry {
+                //         Entry::Data { mbr, data } => {
+                //             println!("  [{}] Data: {} at [{},{},{},{}]", 
+                //                 i, data, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+                //         }
+                //         Entry::Node { mbr, node } => {
+                //             println!("  [{}] Node: mbr=[{},{},{},{}], level={}, type={:?}, {} entries", 
+                //                 i, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1],
+                //                 node.level, node.node_type, node.entries.len());
+                //         }
+                //     }
+                // }
+                
+                // println!("\nTarget rectangle: [{},{},{},{}]", 
+                //     rect.min[0], rect.min[1], rect.max[0], rect.max[1]);
+                
+                // println!("\nChoose subtree calculation details:");
+                // for (i, entry) in current.entries.iter().enumerate() {
+                //     let mbr = entry.mbr();
+                //     let enlargement = mbr.enlargement(rect);
+                //     let area = mbr.area();
+                //     println!("  Entry[{}]: enlargement={:.2}, area={:.2}", i, enlargement, area);
+                // }
+                
+                // // // 添加完整的树结构打印
+                // // println!("\n=== COMPLETE TREE STRUCTURE ===");
+                // // Self::print_tree_structure_debug(self);
+
+
+                // panic!("Expected child entry at index {} but found {:?}", 
+                //     best_index, 
+                //     current.entries.get(best_index).map(|e| match e {
+                //         Entry::Data { data, .. } => format!("Data({})", data),
+                //         Entry::Node { .. } => "Node".to_string(),
+                //     }).unwrap_or_else(|| "None".to_string())
+                // );
+            
+                // panic!("Expected child entry");
             }
         }
         
@@ -204,7 +300,13 @@ impl RTree {
         
         // 获取要分裂的节点并提取其条目
         let (entries, node_type, level) = {
-            let node = self.get_last_node_mut(&path);
+            let node = match self.get_last_node_mut(&path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get node during split_and_propagate");
+                    return;
+                }
+            };
             
             // 检查是否真的需要分裂
             if node.entries.len() <= max_entries {
@@ -226,7 +328,13 @@ impl RTree {
         
         // 更新原节点
         {
-            let node = self.get_last_node_mut(&path);
+            let node = match self.get_last_node_mut(&path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get node during split group update");
+                    return;
+                }
+            };
             node.entries = group1;
             node.update_mbr();
         }
@@ -257,7 +365,13 @@ impl RTree {
             }
         } else {
             // 父节点不是根节点
-            let parent = self.get_last_node_mut(&path);
+            let parent = match self.get_last_node_mut(&path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node during split propagation");
+                    return;
+                }
+            };
             
             // 添加新节点到父节点
             parent.add_entry(Entry::Node {
@@ -280,16 +394,39 @@ impl RTree {
     fn adjust_tree_upward(&mut self, mut path: Vec<usize>) {
         // 从叶子节点向上更新每一层的MBR
         while !path.is_empty() {
-            let current_node_index = path.pop().unwrap();
+            
+            // 获取当前节点,如果当前节点为空，则跳过当前节点
+            let node = match self.get_last_node_mut(&path) {
+                    Some(node) => node,
+                    None => {
+                        path.pop().unwrap();
+                        break;
+                    }
+                };
             
             // 更新当前节点的MBR
-            let current_mbr = {
-                let mut current_path = path.clone();
-                current_path.push(current_node_index);
-                let node = self.get_last_node_mut(&current_path);
-                node.update_mbr();
-                node.mbr.clone()
-            };
+            node.update_mbr();
+
+            // 更新当前节点的MBR
+            // let current_mbr = {
+            //     let mut current_path = path.clone();
+            //     current_path.push(current_node_index);
+            //     let node = match self.get_last_node_mut(&current_path) {
+            //         Some(node) => node,
+            //         None => {
+            //             println!("Warning: Failed to get node during MBR update");
+            //             break;
+            //         }
+            //     };
+            //     node.update_mbr();
+            //     node.mbr.clone()
+            // };
+
+            // 将当前节点从 path 中移除
+            let current_node_index = path[path.len() - 1];
+            path.pop().unwrap();
+
+            let current_mbr = node.mbr.clone();
             
             // 更新父节点中指向当前节点的条目的MBR
             if path.is_empty() {
@@ -301,7 +438,13 @@ impl RTree {
                 }
             } else {
                 // 更新中间层的父节点
-                let parent = self.get_last_node_mut(&path);
+                let parent = match self.get_last_node_mut(&path) {
+                    Some(node) => node,
+                    None => {
+                        println!("Warning: Failed to get parent node (Empty Node) during MBR update");
+                        break;
+                    }
+                };
                 if let Some(Entry::Node { mbr, .. }) = parent.entries.get_mut(current_node_index) {
                     *mbr = current_mbr;
                 }
@@ -315,18 +458,105 @@ impl RTree {
     }
 
     /// 根据路径获取节点的可变引用
-    fn get_last_node_mut(&mut self, path: &[usize]) -> &mut Node {
+    fn get_last_node_mut(&mut self, path: &[usize]) -> Option<&mut Node> {
         let mut current = self.root_mut().as_mut().unwrap();
         
         for &index in path {
             if let Some(Entry::Node { node, .. }) = current.entries.get_mut(index) {
                 current = node;
             } else {
-                panic!("Invalid path");
+                return None;
             }
         }
         
-        current
+        Some(current)
+    }
+    
+
+    /// 删除空的非叶子节点 - 从指定路径的节点开始，递归删除空的父节点
+    /// 
+    /// 这个函数检查path指定的节点，如果它是空的非叶子节点，则删除它。
+    /// 删除后，检查其父节点是否也变成空的，如果是则继续向上删除。
+    /// 
+    /// # 参数
+    /// - `node_path`: 从根节点到目标节点的路径索引
+    /// 
+    /// # 说明
+    /// - 只删除空的非叶子节点（索引节点）
+    /// - 叶子节点即使为空也不会被删除
+    /// - 只有当删除节点后其父节点变空时，才继续向上处理
+    /// - 如果根节点变空，会清空整个树
+    /// - 删除节点后会向上调整MBR
+    fn remove_empty_nodes(&mut self, node_path: Vec<usize>) {
+        if node_path.is_empty() {
+            return;
+        }
+        
+        // 检查指定路径的节点是否为空的非叶子节点
+        let should_remove = {
+            let node = match self.get_last_node_mut(&node_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get node in remove_empty_nodes");
+                    return;
+                }
+            };
+            node.is_index_node() && node.entries.is_empty()
+        };
+        
+        if !should_remove {
+            // 当前节点不是空的非叶子节点，不需要删除
+            return;
+        }
+        
+        // 构造父节点路径
+        let mut parent_path = node_path.clone();
+        let node_index = parent_path.pop().unwrap();
+        
+        if parent_path.is_empty() {
+            // 要删除的是根节点的直接子节点
+            let root = self.root_mut().as_mut().unwrap();
+            
+            if node_index < root.entries.len() {
+                root.entries.remove(node_index);
+                
+                // 检查根节点是否变空
+                if root.entries.is_empty() {
+                    // 清空整个树
+                    *self.root_mut() = None;
+                } else {
+                    // 更新根节点的MBR
+                    root.update_mbr();
+                    
+                    // 根节点不为空，停止递归
+                }
+            }
+        } else {
+            // 要删除的是中间节点
+            let parent = match self.get_last_node_mut(&parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node in remove_empty_nodes");
+                    return;
+                }
+            };
+            
+            if node_index < parent.entries.len() {
+                parent.entries.remove(node_index);
+                
+                // 更新父节点的MBR
+                parent.update_mbr();
+                
+                // 检查父节点是否也变空了
+                if parent.entries.is_empty() && parent.is_index_node() {
+                    // 父节点也变空了，递归处理父节点
+                    self.remove_empty_nodes(parent_path);
+                } else {
+                    // 父节点不为空，向上调整MBR
+                    self.adjust_tree_upward(parent_path);
+                }
+            }
+        }
     }
     
     /// 查找包含指定数据条目的叶子节点路径
@@ -388,7 +618,13 @@ impl RTree {
     fn handle_leaf_underflow(&mut self, leaf_path: Vec<usize>) {
         // 1. 收集下溢叶子节点中的所有数据条目
         let entries_to_reinsert = {
-            let leaf_node = self.get_last_node_mut(&leaf_path);
+            let leaf_node = match self.get_last_node_mut(&leaf_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get leaf node in handle_leaf_underflow");
+                    return;
+                }
+            };
             let mut entries = Vec::new();
             for entry in &leaf_node.entries {
                 if let Entry::Data { mbr, data } = entry {
@@ -411,16 +647,49 @@ impl RTree {
             }
         } else {
             // 父节点是中间节点
-            let parent = self.get_last_node_mut(parent_path);
+            let parent = match self.get_last_node_mut(parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node in handle_leaf_underflow");
+                    // 仍然尝试重新插入条目
+                    for (rect, data) in entries_to_reinsert {
+                        self.insert(rect, data);
+                    }
+                    return;
+                }
+            };
             if leaf_index < parent.entries.len() {
                 parent.entries.remove(leaf_index);
                 parent.update_mbr();
             }
         }
-        
+
+        // 2.5 如果父节点变空了，递归删除空的非叶子节点
+        if !parent_path.is_empty() {
+            let parent = match self.get_last_node_mut(parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node for empty check");
+                    // 仍然尝试重新插入条目
+                    for (rect, data) in entries_to_reinsert {
+                        self.insert(rect, data);
+                    }
+                    return;
+                }
+            };
+            if parent.entries.is_empty() && parent.is_index_node() {
+                // 父节点也变空了，递归处理父节点
+                self.remove_empty_nodes(parent_path.to_vec());
+            } 
+        }
+         
         // 3. 向上调整MBR（仅调整MBR，不做其他下溢检查）
         self.adjust_tree_upward(parent_path.to_vec());
         
+        // // for test
+        // println!("In handle_leaf_underflow, before insert,Complete R-tree structure:");
+        // Self::print_tree_structure_debug(self);
+
         // 4. 重新插入收集到的数据条目
         for (mbr, data) in entries_to_reinsert {
             self.insert(mbr, data);
@@ -616,6 +885,54 @@ impl RTree {
     fn enlargement_cost(&self, mbr: &Rectangle, rect: &Rectangle) -> f64 {
         mbr.enlargement(rect)
     }
+}
+
+impl RTree {
+
+    /// 打印完整的树结构用于调试 - 静态方法版本
+    fn print_tree_structure_debug(&self) {
+        fn print_node_recursive(node: &Node, depth: usize, path: String) {
+            let indent = "  ".repeat(depth);
+            println!("{}Node{} (level={}, type={:?}, mbr=[{:.2},{:.2},{:.2},{:.2}], {} entries):", 
+                indent, path, node.level, node.node_type, 
+                node.mbr.min[0], node.mbr.min[1], node.mbr.max[0], node.mbr.max[1],
+                node.entries.len());
+            
+            if node.entries.is_empty() {
+                println!("{}  ❌ EMPTY NODE!", indent);
+            }
+            
+            for (i, entry) in node.entries.iter().enumerate() {
+                match entry {
+                    Entry::Data { mbr, data } => {
+                        println!("{}  [{}] Data: {} at [{:.2},{:.2},{:.2},{:.2}]", 
+                            indent, i, data, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+                    }
+                    Entry::Node { mbr, node: child_node } => {
+                        println!("{}  [{}] Node: mbr=[{:.2},{:.2},{:.2},{:.2}] -> child:", 
+                            indent, i, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+                        
+                        let child_path = if path.is_empty() {
+                            format!("[{}]", i)
+                        } else {
+                            format!("{}[{}]", path, i)
+                        };
+                        
+                        print_node_recursive(child_node, depth + 1, child_path);
+                    }
+                }
+            }
+        }
+        
+        println!("📊 Complete R-tree structure:");
+        if let Some(root) = self.root_ref() {
+            print_node_recursive(root, 0, "ROOT".to_string());
+        } else {
+            println!("❌ EMPTY TREE (root is None)");
+        }
+        println!("{}", "=".repeat(60));
+    }
+
 }
 
 #[cfg(test)]
@@ -1087,34 +1404,35 @@ mod tests {
         assert_eq!(rtree.len(), 0);
         assert!(rtree.is_empty());
     }
-}
 
-#[allow(dead_code)]
-fn print_tree_structure(rtree: &RTree, depth: usize) {
-    fn print_node(node: &Node, depth: usize) {
-        let indent = "  ".repeat(depth);
-        println!("{}Node (level={}, type={:?}, mbr=[{},{},{},{}]):", 
-            indent, node.level, node.node_type, 
-            node.mbr.min[0], node.mbr.min[1], node.mbr.max[0], node.mbr.max[1]);
-        
-        for (i, entry) in node.entries.iter().enumerate() {
-            match entry {
-                Entry::Data { mbr, data } => {
-                    println!("{}  [{}] Data: {} at [{},{},{},{}]", 
-                        indent, i, data, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
-                }
-                Entry::Node { mbr, node } => {
-                    println!("{}  [{}] Node: mbr=[{},{},{},{}]", 
-                        indent, i, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
-                    print_node(node, depth + 2);
+    #[allow(dead_code)]
+    fn print_tree_structure(rtree: &RTree, depth: usize) {
+        fn print_node(node: &Node, depth: usize) {
+            let indent = "  ".repeat(depth);
+            println!("{}Node (level={}, type={:?}, mbr=[{},{},{},{}]):", 
+                indent, node.level, node.node_type, 
+                node.mbr.min[0], node.mbr.min[1], node.mbr.max[0], node.mbr.max[1]);
+            
+            for (i, entry) in node.entries.iter().enumerate() {
+                match entry {
+                    Entry::Data { mbr, data } => {
+                        println!("{}  [{}] Data: {} at [{},{},{},{}]", 
+                            indent, i, data, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+                    }
+                    Entry::Node { mbr, node } => {
+                        println!("{}  [{}] Node: mbr=[{},{},{},{}]", 
+                            indent, i, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+                        print_node(node, depth + 2);
+                    }
                 }
             }
         }
+        
+        if let Some(root) = rtree.root_ref() {
+            print_node(root, depth);
+        } else {
+            println!("Empty tree");
+        }
     }
-    
-    if let Some(root) = rtree.root_ref() {
-        print_node(root, depth);
-    } else {
-        println!("Empty tree");
-    }
+
 }

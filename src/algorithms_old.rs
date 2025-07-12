@@ -4,39 +4,6 @@ use crate::rtree::RTree;
 
 /// R-tree算法实现
 impl RTree {
-    /// 插入新的数据条目 - 遵循论文Algorithm Insert
-    pub fn insert(&mut self, rect: Rectangle, data: i32) {
-        // I1: 如果根节点不存在，创建根节点
-        if self.root_ref().is_none() {
-            let mut root = Node::new_leaf_node();
-            root.add_entry(Entry::Data { mbr: rect, data });
-            *self.root_mut() = Some(Box::new(root));
-            return;
-        }
-
-        // I2: 选择叶子节点
-        let leaf_path = self.choose_leaf_path(&rect);
-        
-        // I3: 添加记录到叶子节点
-        let max_entries = self.max_entries_internal();
-        let leaf_node = match self.get_last_node_mut(&leaf_path) {
-            Some(node) => node,
-            None => {
-                // 如果无法获取叶子节点，说明路径有问题，这是一个严重的错误
-                panic!("Failed to get leaf node during insertion");
-            }
-        };
-        leaf_node.add_entry(Entry::Data { mbr: rect, data });
-        
-        // I4: 检查是否需要分裂并调整树
-        if leaf_node.entries.len() > max_entries {
-            self.handle_overflow(leaf_path);
-        } else {
-            // 只需要更新MBR
-            self.adjust_tree_upward(leaf_path);
-        }
-    }
-
     /// 删除指定的数据条目 - 使用简化的下溢处理策略
     pub fn delete(&mut self, rect: &Rectangle, data: i32) -> bool {
         
@@ -98,53 +65,8 @@ impl RTree {
         }
     }
 
-    /// 选择叶子节点路径 - 遵循论文ChooseLeaf算法
-    fn choose_leaf_path(&self, rect: &Rectangle) -> Vec<usize> {
-        let mut path = Vec::new();
-        let mut current = self.root_ref().as_ref().unwrap();
-        
-        // CL1: 初始化，从根节点开始
-        // CL2: 叶子检查
-        while !current.is_leaf_node() {
-            
-            // CL3: 选择子树 - 选择扩大面积最小的条目
-            let best_index = self.choose_subtree(&current.entries, rect);
-            path.push(best_index);
-            
-            // CL4: 下降到子节点
-            if let Some(Entry::Node { node, .. }) = current.entries.get(best_index) {
-                current = node;
-            }
-        }
-        
-        path
-    }
-
-    /// 选择子树 - 计算扩大面积最小的条目
-    fn choose_subtree(&self, entries: &[Entry], rect: &Rectangle) -> usize {
-        let mut best_index = 0;
-        let mut min_enlargement = f64::INFINITY;
-        let mut min_area = f64::INFINITY;
-        
-        for (i, entry) in entries.iter().enumerate() {
-            let mbr = entry.mbr();
-            let enlargement = mbr.enlargement(rect);
-            let area = mbr.area();
-            
-            // 选择扩大面积最小的，如果相同则选择面积最小的
-            if enlargement < min_enlargement || 
-               (enlargement == min_enlargement && area < min_area) {
-                min_enlargement = enlargement;
-                min_area = area;
-                best_index = i;
-            }
-        }
-        
-        best_index
-    }
-
     /// 处理节点溢出 - 使用二次分裂算法
-    fn handle_overflow(&mut self, path: Vec<usize>) {
+    pub(crate) fn handle_overflow(&mut self, path: Vec<usize>) {
         // 如果是根节点溢出，需要特殊处理
         if path.is_empty() {
             // 根节点溢出 - 创建新的根节点
@@ -277,7 +199,7 @@ impl RTree {
     }
 
     /// 向上调整树 - 更新MBR
-    fn adjust_tree_upward(&mut self, mut path: Vec<usize>) {
+    pub(crate) fn adjust_tree_upward(&mut self, mut path: Vec<usize>) {
         // 从叶子节点向上更新每一层的MBR
         while !path.is_empty() {
             
@@ -329,7 +251,7 @@ impl RTree {
     }
 
     /// 根据路径获取节点的可变引用
-    fn get_last_node_mut(&mut self, path: &[usize]) -> Option<&mut Node> {
+    pub(crate) fn get_last_node_mut(&mut self, path: &[usize]) -> Option<&mut Node> {
         let mut current = self.root_mut().as_mut().unwrap();
         
         for &index in path {

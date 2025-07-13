@@ -2,128 +2,325 @@ use crate::rectangle::Rectangle;
 use crate::node::{Node, Entry};
 use crate::rtree::RTree;
 
-/// R-tree算法实现
+/// R-tree删除算法实现
 impl RTree {
-    
-
-    
-
-}
-
-
-
-impl RTree {
-    #[allow(dead_code)]
-    /// 打印完整的树结构用于调试 - 静态方法版本
-    fn print_tree_structure_debug(&self) {
-        fn print_node_recursive(node: &Node, depth: usize, path: String) {
-            let indent = "  ".repeat(depth);
-            println!("{}Node{} (level={}, type={:?}, mbr=[{:.2},{:.2},{:.2},{:.2}], {} entries):", 
-                indent, path, node.level, node.node_type, 
-                node.mbr.min[0], node.mbr.min[1], node.mbr.max[0], node.mbr.max[1],
-                node.entries.len());
-            
-            if node.entries.is_empty() {
-                println!("{}  ❌ EMPTY NODE!", indent);
-            }
-            
-            for (i, entry) in node.entries.iter().enumerate() {
-                match entry {
-                    Entry::Data { mbr, data } => {
-                        println!("{}  [{}] Data: {} at [{:.2},{:.2},{:.2},{:.2}]", 
-                            indent, i, data, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
+    /// 删除指定的数据条目 - 使用简化的下溢处理策略
+    pub fn delete(&mut self, rect: &Rectangle, data: i32) -> bool {
+        
+        // D1: 找到包含目标条目的叶子节点
+        if let Some(leaf_path) = self.find_leaf_path(rect, data) {
+            // D2: 从叶子节点删除条目
+            let (deleted, leaf_entries_count) = {
+                let leaf_node = match self.get_last_node_mut(&leaf_path) {
+                    Some(node) => node,
+                    None => {
+                        println!("Warning: Failed to get leaf node during deletion");
+                        return false;
                     }
-                    Entry::Node { mbr, node: child_node } => {
-                        println!("{}  [{}] Node: mbr=[{:.2},{:.2},{:.2},{:.2}] -> child:", 
-                            indent, i, mbr.min[0], mbr.min[1], mbr.max[0], mbr.max[1]);
-                        
-                        let child_path = if path.is_empty() {
-                            format!("[{}]", i)
-                        } else {
-                            format!("{}[{}]", path, i)
-                        };
-                        
-                        print_node_recursive(child_node, depth + 1, child_path);
+                };
+                let initial_count = leaf_node.entries.len();
+                
+                // 删除匹配的条目
+                leaf_node.entries.retain(|entry| {
+                    if let Entry::Data { mbr, data: entry_data } = entry {
+                        !(mbr == rect && entry_data == &data)
+                    } else {
+                        true
+                    }
+                });
+                
+                // 检查是否真的删除了条目
+                if leaf_node.entries.len() == initial_count {
+                    return false; // 没有找到要删除的条目
+                }
+                
+                // 更新叶子节点的MBR
+                leaf_node.update_mbr();
+                
+                (true, leaf_node.entries.len())
+            };
+            
+            if deleted {
+                // D3: 检查叶子节点是否下溢
+                let min_entries = self.min_entries_internal();
+
+                if leaf_entries_count < min_entries && !leaf_path.is_empty() {
+                    
+                    // 叶子节点下溢且不是根节点 - 使用简化的处理方案
+                    self.handle_leaf_underflow(leaf_path.clone());
+                } else {
+                    // 只需要向上调整MBR
+                    self.adjust_tree_upward(leaf_path);
+                }
+                
+                // D4: 如果根节点只有一个条目且为索引节点，则缩短树
+                self.shorten_tree();
+                
+                true
+            } else {
+                false
+            }
+        } else {
+            false // 没有找到要删除的条目
+        }
+    }
+
+    /// 查找包含指定数据条目的叶子节点路径
+    /// 
+    /// 返回从根节点到包含目标条目的叶子节点的路径
+    pub(crate) fn find_leaf_path(&self, rect: &Rectangle, data: i32) -> Option<Vec<usize>> {
+        if let Some(root) = self.root_ref() {
+            let mut path = Vec::new();
+            if self.find_leaf_recursive(root, rect, data, &mut path) {
+                Some(path)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    
+    /// 递归查找包含指定数据条目的叶子节点
+    fn find_leaf_recursive(&self, node: &Node, rect: &Rectangle, data: i32, path: &mut Vec<usize>) -> bool {
+        if node.is_leaf_node() {
+            // 在叶子节点中查找目标条目
+            for entry in node.entries.iter() {
+                if let Entry::Data { mbr, data: entry_data } = entry {
+                    if mbr == rect && *entry_data == data {
+                        return true; // 找到了目标条目
                     }
                 }
             }
-        }
-        
-        println!("📊 Complete R-tree structure:");
-        if let Some(root) = self.root_ref() {
-            print_node_recursive(root, 0, "ROOT".to_string());
+            false
         } else {
-            println!("❌ EMPTY TREE (root is None)");
+            // 在索引节点中递归搜索
+            for (i, entry) in node.entries.iter().enumerate() {
+                if let Entry::Node { mbr, node: child_node } = entry {
+                    // 只在MBR包含目标矩形的子树中搜索
+                    if mbr.contains(rect) {
+                        path.push(i);
+                        if self.find_leaf_recursive(child_node, rect, data, path) {
+                            return true;
+                        }
+                        path.pop();
+                    }
+                }
+            }
+            false
         }
-        println!("{}", "=".repeat(60));
+    }
+    
+    /// 处理叶子节点下溢 - 简化方案
+    /// 
+    /// 1. 收集下溢叶子节点中的所有数据条目
+    /// 2. 将这些条目重新插入到树中
+    /// 3. 从父节点中移除下溢的叶子节点
+    /// 4. 向上调整MBR
+    pub(crate) fn handle_leaf_underflow(&mut self, leaf_path: Vec<usize>) {
+        // 1. 收集下溢叶子节点中的所有数据条目
+        let entries_to_reinsert = {
+            let leaf_node = match self.get_last_node_mut(&leaf_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get leaf node in handle_leaf_underflow");
+                    return;
+                }
+            };
+            let mut entries = Vec::new();
+            for entry in &leaf_node.entries {
+                if let Entry::Data { mbr, data } = entry {
+                    entries.push((mbr.clone(), *data));
+                }
+            }
+            entries
+        };
+        
+        // 2. 从父节点中移除下溢的叶子节点
+        let parent_path = &leaf_path[..leaf_path.len() - 1];
+        let leaf_index = leaf_path[leaf_path.len() - 1];
+        
+        if parent_path.is_empty() {
+            // 父节点是根节点
+            let root = self.root_mut().as_mut().unwrap();
+            if leaf_index < root.entries.len() {
+                root.entries.remove(leaf_index);
+                root.update_mbr();
+            }
+        } else {
+            // 父节点是中间节点
+            let parent = match self.get_last_node_mut(parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node in handle_leaf_underflow");
+                    // 仍然尝试重新插入条目
+                    for (rect, data) in entries_to_reinsert {
+                        self.insert(rect, data);
+                    }
+                    return;
+                }
+            };
+            if leaf_index < parent.entries.len() {
+                parent.entries.remove(leaf_index);
+                parent.update_mbr();
+            }
+        }
+
+        // 2.5 如果父节点变空了，递归删除空的非叶子节点
+        if !parent_path.is_empty() {
+            let parent = match self.get_last_node_mut(parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node for empty check");
+                    // 仍然尝试重新插入条目
+                    for (rect, data) in entries_to_reinsert {
+                        self.insert(rect, data);
+                    }
+                    return;
+                }
+            };
+            if parent.entries.is_empty() && parent.is_index_node() {
+                // 父节点也变空了，递归处理父节点
+                self.remove_empty_nodes(parent_path.to_vec());
+            } 
+        }
+         
+        // 3. 向上调整MBR（仅调整MBR，不做其他下溢检查）
+        self.adjust_tree_upward(parent_path.to_vec());
+        
+        // 4. 重新插入收集到的数据条目
+        for (mbr, data) in entries_to_reinsert {
+            self.insert(mbr, data);
+        }
     }
 
+    /// 删除空的非叶子节点 - 从指定路径的节点开始，递归删除空的父节点
+    /// 
+    /// 这个函数检查path指定的节点，如果它是空的非叶子节点，则删除它。
+    /// 删除后，检查其父节点是否也变成空的，如果是则继续向上删除。
+    /// 
+    /// # 参数
+    /// - `node_path`: 从根节点到目标节点的路径索引
+    /// 
+    /// # 说明
+    /// - 只删除空的非叶子节点（索引节点）
+    /// - 叶子节点即使为空也不会被删除
+    /// - 只有当删除节点后其父节点变空时，才继续向上处理
+    /// - 如果根节点变空，会清空整个树
+    /// - 删除节点后会向上调整MBR
+    pub(crate) fn remove_empty_nodes(&mut self, node_path: Vec<usize>) {
+        if node_path.is_empty() {
+            return;
+        }
+        
+        // 检查指定路径的节点是否为空的非叶子节点
+        let should_remove = {
+            let node = match self.get_last_node_mut(&node_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get node in remove_empty_nodes");
+                    return;
+                }
+            };
+            node.is_index_node() && node.entries.is_empty()
+        };
+        
+        if !should_remove {
+            // 当前节点不是空的非叶子节点，不需要删除
+            return;
+        }
+        
+        // 构造父节点路径
+        let mut parent_path = node_path.clone();
+        let node_index = parent_path.pop().unwrap();
+        
+        if parent_path.is_empty() {
+            // 要删除的是根节点的直接子节点
+            let root = self.root_mut().as_mut().unwrap();
+            
+            if node_index < root.entries.len() {
+                root.entries.remove(node_index);
+                
+                // 检查根节点是否变空
+                if root.entries.is_empty() {
+                    // 清空整个树
+                    *self.root_mut() = None;
+                } else {
+                    // 更新根节点的MBR
+                    root.update_mbr();
+                    
+                    // 根节点不为空，停止递归
+                }
+            }
+        } else {
+            // 要删除的是中间节点
+            let parent = match self.get_last_node_mut(&parent_path) {
+                Some(node) => node,
+                None => {
+                    println!("Warning: Failed to get parent node in remove_empty_nodes");
+                    return;
+                }
+            };
+            
+            if node_index < parent.entries.len() {
+                parent.entries.remove(node_index);
+                
+                // 更新父节点的MBR
+                parent.update_mbr();
+                
+                // 检查父节点是否也变空了
+                if parent.entries.is_empty() && parent.is_index_node() {
+                    // 父节点也变空了，递归处理父节点
+                    self.remove_empty_nodes(parent_path);
+                } else {
+                    // 父节点不为空，向上调整MBR
+                    self.adjust_tree_upward(parent_path);
+                }
+            }
+        }
+    }
+    
+    /// 缩短树 - 如果根节点只有一个条目且为索引节点，则将其子节点作为新的根节点
+    pub(crate) fn shorten_tree(&mut self) {
+        loop {
+            let should_shorten = {
+                if let Some(root) = self.root_ref() {
+                    root.is_index_node() && root.entries.len() == 1
+                } else {
+                    false
+                }
+            };
+            
+            if should_shorten {
+                // 将唯一的子节点提升为新的根节点
+                let old_root = self.root_mut().take().unwrap();
+                let mut entries = old_root.entries;
+                if let Some(Entry::Node { node, .. }) = entries.pop() {
+                    *self.root_mut() = Some(node);
+                } else {
+                    // 恢复根节点，防止出错
+                    let restored_root = Node::new(old_root.node_type, old_root.level);
+                    *self.root_mut() = Some(Box::new(restored_root));
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        // 如果根节点为空（所有条目都被删除），则清空树
+        if let Some(root) = self.root_ref() {
+            if root.entries.is_empty() {
+                *self.root_mut() = None;
+            }
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_enlargement_cost() {
-        let rtree = RTree::new(4);
-        let rect1 = Rectangle::new(0.0, 0.0, 5.0, 5.0);
-        let rect2 = Rectangle::new(3.0, 3.0, 8.0, 8.0);
-        
-        let cost = rtree.enlargement_cost(&rect1, &rect2);
-        assert_eq!(cost, 39.0); // 8*8 - 5*5 = 64 - 25 = 39
-    }
-
-    #[test]
-    fn test_insert_and_search() {
-        let mut rtree = RTree::new(4);
-        
-        // 插入一些数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 10.0, 10.0), 1);
-        rtree.insert(Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
-        rtree.insert(Rectangle::new(20.0, 20.0, 30.0, 30.0), 3);
-        
-        // 搜索相交的矩形
-        let query = Rectangle::new(8.0, 8.0, 12.0, 12.0);
-        let results = rtree.search(&query);
-        
-        // 应该找到数据 1 和 2
-        assert!(results.contains(&1));
-        assert!(results.contains(&2));
-        assert!(!results.contains(&3));
-    }
-    
-
-    
-    #[test]
-    fn test_node_split_with_overflow() {
-        let mut rtree = RTree::new(3); // 最大3个条目，最小1个
-        
-        // 插入足够多的数据以触发分裂
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), 3);
-        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), 4); // 这应该触发分裂
-        
-        // 验证树结构 - 根节点应该不再是叶子节点
-        assert!(!rtree.is_empty());
-        let root = rtree.root_ref().as_ref().unwrap();
-        
-        // 如果发生了分裂，根节点应该是索引节点
-        if root.entries.len() > 3 {
-            // 根节点溢出，应该创建新的根节点
-            assert!(root.is_index_node());
-        }
-        
-        // 搜索应该仍然工作
-        let results = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
-        assert_eq!(results.len(), 4);
-        assert!(results.contains(&1));
-        assert!(results.contains(&2));
-        assert!(results.contains(&3));
-        assert!(results.contains(&4));
-    }
-    
     #[test]
     fn test_delete() {
         let mut rtree = RTree::new(4);
@@ -241,59 +438,6 @@ mod tests {
             let results = rtree.search(&Rectangle::new(x - 0.1, -0.1, x + 1.1, 1.1));
             println!("After deletion - Entry {}: found = {}", i, results.contains(&i));
         }
-    }
-    
-    #[test]
-    fn test_insert_debug() {
-        let mut rtree = RTree::new(3);
-        
-        for i in 0..6 {
-            let x = (i as f64) * 2.0;
-            let rect = Rectangle::new(x, 0.0, x + 1.0, 1.0);
-            println!("Inserting entry {} at ({}, {}, {}, {})", i, rect.min[0], rect.min[1], rect.max[0], rect.max[1]);
-            rtree.insert(rect, i);
-            
-            // 立即验证刚插入的条目能否找到
-            let search_rect = Rectangle::new(x, 0.0, x + 1.0, 1.0);
-            let results = rtree.search(&search_rect);
-            println!("After inserting {}: search results = {:?}", i, results);
-            
-            if !results.contains(&i) {
-                println!("ERROR: Just inserted entry {} but cannot find it!", i);
-                // 尝试用更大的搜索区域
-                let expanded_rect = Rectangle::new(x - 1.0, -1.0, x + 2.0, 2.0);
-                let expanded_results = rtree.search(&expanded_rect);
-                println!("Expanded search results: {:?}", expanded_results);
-                break;
-            }
-        }
-    }
-    
-    #[test]
-    fn test_tree_structure_debug() {
-        let mut rtree = RTree::new(3);
-        
-        // 插入前4个条目
-        for i in 0..4 {
-            let x = (i as f64) * 2.0;
-            let rect = Rectangle::new(x, 0.0, x + 1.0, 1.0);
-            rtree.insert(rect, i);
-        }
-        
-        // 打印树结构
-        println!("Tree structure after inserting 0-3:");
-        print_tree_structure(&rtree, 0);
-        
-        // 插入第5个条目
-        let rect4 = Rectangle::new(8.0, 0.0, 9.0, 1.0);
-        rtree.insert(rect4, 4);
-        
-        println!("\nTree structure after inserting 4:");
-        print_tree_structure(&rtree, 0);
-        
-        // 测试搜索
-        let search_results = rtree.search(&Rectangle::new(8.0, 0.0, 9.0, 1.0));
-        println!("Search results for entry 4: {:?}", search_results);
     }
     
     #[test]
@@ -528,5 +672,4 @@ mod tests {
             println!("Empty tree");
         }
     }
-
 }

@@ -1,11 +1,16 @@
-// 算法模块声明文件
-// 重新导出所有子模块
+// R-tree算法模块
+// 
+// 这个模块包含R-tree的所有核心算法实现，按功能分解为不同的子模块：
+// - search: 搜索和查询算法
+// - insert: 插入和树构建算法  
+// - split: 节点分裂算法
+// - delete: 删除和树维护算法
+// - utils: 共用的工具函数
+// - debug: 调试和可视化工具
 
 pub mod search;
 pub mod insert;
 pub mod split;
-
-// 临时包含原始algorithms文件的其余功能
-// 这些功能将在后续步骤中逐步迁移到专门的模块中
-#[path = "../algorithms_old.rs"]
-pub mod algorithms_old;
+pub mod delete;
+pub mod utils;
+pub mod debug;

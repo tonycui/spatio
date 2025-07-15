@@ -41,6 +41,7 @@ pub struct DataEntry {
 }
 
 /// R-tree主结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RTree {
     /// 根节点
     root: Option<Box<Node>>,

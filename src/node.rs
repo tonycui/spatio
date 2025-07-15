@@ -19,7 +19,7 @@ pub enum NodeType {
 /// 每个条目都包含一个MBR（最小边界矩形）和对应的内容：
 /// - Data条目：存储用户插入的真实数据，只出现在叶子节点中
 /// - Node条目：存储子节点的引用，只出现在索引节点中
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Entry {
     /// 数据条目：存储用户插入的真实数据
     /// 
@@ -104,7 +104,7 @@ impl Entry {
 /// R-tree节点
 /// 
 /// R-tree的核心数据结构，表示树中的一个节点
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     /// 节点的最小边界矩形
     /// 

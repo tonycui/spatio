@@ -7,6 +7,7 @@
 // - delete: 删除和树维护算法
 // - utils: 共用的工具函数
 // - debug: 调试和可视化工具
+// - persistence: 持久化和序列化功能
 
 pub mod search;
 pub mod insert;
@@ -14,3 +15,4 @@ pub mod split;
 pub mod delete;
 pub mod utils;
 pub mod debug;
+pub mod persistence;

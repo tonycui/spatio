@@ -8,6 +8,7 @@
 // - utils: 共用的工具函数
 // - debug: 调试和可视化工具
 // - persistence: 持久化和序列化功能
+// - concurrent: 并发安全的R-tree实现
 
 pub mod search;
 pub mod insert;
@@ -16,3 +17,4 @@ pub mod delete;
 pub mod utils;
 pub mod debug;
 pub mod persistence;
+pub mod concurrent;

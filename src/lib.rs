@@ -34,3 +34,4 @@ pub mod algorithms;
 pub use rectangle::Rectangle;
 pub use node::{Node, Entry};
 pub use rtree::RTree;
+pub use algorithms::concurrent::{ConcurrentRTree, ConcurrentError};

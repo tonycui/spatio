@@ -1,8 +1,13 @@
 pub mod server;
 pub mod protocol;
 pub mod commands;
+pub mod client;
 
 use std::error::Error;
+
+// 重新导出常用类型，便于二进制文件使用
+pub use server::TcpServer;
+pub use client::{ClientConnection, CliArgs, OutputFormatter};
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 

@@ -1,16 +1,22 @@
 use tokio::net::{TcpListener, TcpStream};
 use tracing::{error, info};
+use std::sync::Arc;
 
 use crate::{Config, Result};
 use crate::server::Connection;
+use crate::storage::GeoDatabase;
 
 pub struct TcpServer {
     config: Config,
+    database: Arc<GeoDatabase>,
 }
 
 impl TcpServer {
     pub fn new(config: Config) -> Self {
-        Self { config }
+        Self { 
+            config,
+            database: Arc::new(GeoDatabase::new()),
+        }
     }
 
     pub async fn start(&self) -> Result<()> {
@@ -25,9 +31,12 @@ impl TcpServer {
                 Ok((stream, addr)) => {
                     info!("Accepted connection from {}", addr);
                     
+                    // 克隆数据库引用以便在异步任务中使用
+                    let database = Arc::clone(&self.database);
+                    
                     // 为每个连接创建一个异步任务
                     tokio::spawn(async move {
-                        if let Err(e) = Self::handle_client(stream).await {
+                        if let Err(e) = Self::handle_client(stream, database).await {
                             error!("Error handling client {}: {}", addr, e);
                         }
                     });
@@ -39,8 +48,8 @@ impl TcpServer {
         }
     }
 
-    async fn handle_client(stream: TcpStream) -> Result<()> {
-        let mut connection = Connection::new(stream);
+    async fn handle_client(stream: TcpStream, database: Arc<GeoDatabase>) -> Result<()> {
+        let mut connection = Connection::new(stream, database);
         connection.handle().await
     }
 }

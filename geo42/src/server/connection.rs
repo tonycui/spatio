@@ -1,10 +1,12 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info};
+use std::sync::Arc;
 
 use crate::commands::CommandRegistry;
 use crate::protocol::{RespParser, RespResponse};
 use crate::protocol::parser::RespValue;
+use crate::storage::GeoDatabase;
 use crate::Result;
 
 pub struct Connection {
@@ -14,10 +16,11 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: TcpStream, database: Arc<GeoDatabase>) -> Self {
+        let registry = CommandRegistry::new(database);
         Self {
             stream,
-            registry: CommandRegistry::new(),
+            registry,
             buffer: Vec::with_capacity(4096),
         }
     }
@@ -68,16 +71,12 @@ impl Connection {
     }
 
     async fn process_command(&mut self) -> Result<()> {
-        // 查找完整的命令
-        while let Some(command_bytes) = self.extract_complete_command() {
-            // 解析命令
-            let parser = RespParser::new();
-            let command = parser.parse(&command_bytes)?;
-            
-            debug!("Parsed command: {:?}", command);
+        if let Some(command_bytes) = self.extract_complete_command() {
+            let command_str = String::from_utf8_lossy(&command_bytes);
+            debug!("Processing command: {}", command_str.trim());
 
-            // 执行命令
-            let response = self.execute_command(command)?;
+            // 处理命令
+            let response = self.process_command_str(&command_str).await?;
             
             // 发送响应
             self.stream.write_all(response.as_bytes()).await?;
@@ -85,6 +84,21 @@ impl Connection {
         }
 
         Ok(())
+    }
+
+    async fn process_command_str(&self, data: &str) -> Result<String> {
+        // 解析 RESP 协议
+        let parser = RespParser::new();
+        match parser.parse(data.as_bytes()) {
+            Ok(command) => {
+                let response = self.execute_command(command).await?;
+                Ok(response)
+            }
+            Err(e) => {
+                eprintln!("Parse error: {:?}", e);
+                Ok(RespResponse::error("ERR parse error"))
+            }
+        }
     }
 
     fn extract_complete_command(&mut self) -> Option<Vec<u8>> {
@@ -97,20 +111,20 @@ impl Connection {
         None
     }
 
-    fn execute_command(&self, command: RespValue) -> Result<String> {
+    async fn execute_command(&self, command: RespValue) -> Result<String> {
         match command {
             RespValue::Array(Some(arr)) if !arr.is_empty() => {
                 // 第一个元素是命令名
                 if let RespValue::BulkString(Some(cmd_name)) = &arr[0] {
                     let args = &arr[1..];
-                    self.registry.execute(cmd_name, args)
+                    self.registry.execute(cmd_name, args).await
                 } else {
                     Ok(RespResponse::error("ERR invalid command format"))
                 }
             }
             RespValue::BulkString(Some(cmd_name)) => {
                 // 简单命令（如直接输入 PING）
-                self.registry.execute(&cmd_name, &[])
+                self.registry.execute(&cmd_name, &[]).await
             }
             _ => Ok(RespResponse::error("ERR invalid command format")),
         }

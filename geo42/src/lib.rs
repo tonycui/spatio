@@ -1,7 +1,8 @@
-pub mod server;
-pub mod protocol;
-pub mod commands;
 pub mod client;
+pub mod commands;
+pub mod protocol;
+pub mod server;
+pub mod storage;
 
 use std::error::Error;
 

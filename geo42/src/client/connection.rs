@@ -1,5 +1,5 @@
-use std::net::TcpStream;
 use std::io::{Read, Write};
+use std::net::TcpStream;
 
 use crate::protocol::RespParser;
 use crate::protocol::parser::RespValue;

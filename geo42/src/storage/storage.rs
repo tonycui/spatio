@@ -1,0 +1,315 @@
+use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
+use std::sync::Arc;
+use crate::Result;
+
+/// GeoJSON 对象的简化表示
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeoItem {
+    pub id: String,
+    pub geojson: serde_json::Value,
+}
+
+impl GeoItem {
+    pub fn new(id: String, geojson: serde_json::Value) -> Self {
+        Self { id, geojson }
+    }
+}
+
+/// Collection内部的数据
+#[derive(Debug)]
+pub struct CollectionData {
+    pub items: HashMap<String, GeoItem>,
+    pub metadata: CollectionMetadata,
+    // 未来rtree集成点
+    pub rtree: Option<()>, // 占位符
+}
+
+#[derive(Debug)]
+pub struct CollectionMetadata {
+    pub created_at: std::time::Instant,
+    pub last_accessed: std::time::Instant,
+    pub item_count: usize,
+}
+
+impl CollectionData {
+    fn new() -> Self {
+        Self {
+            items: HashMap::new(),
+            metadata: CollectionMetadata {
+                created_at: std::time::Instant::now(),
+                last_accessed: std::time::Instant::now(),
+                item_count: 0,
+            },
+            rtree: None,
+        }
+    }
+}
+
+/// 异步地理数据库，管理多个 Collection (SharedMap架构)
+pub struct GeoDatabase {
+    // SharedMap: 外层管理collections，内层管理collection数据
+    collections: Arc<RwLock<HashMap<String, Arc<RwLock<CollectionData>>>>>,
+}
+
+impl GeoDatabase {
+    pub fn new() -> Self {
+        Self {
+            collections: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
+
+    /// 获取或创建collection (异步版本)
+    async fn get_or_create_collection(&self, collection_id: &str) -> Arc<RwLock<CollectionData>> {
+        // 1. 先尝试读锁获取现有collection
+        {
+            let collections = self.collections.read().await;
+            if let Some(collection) = collections.get(collection_id) {
+                return collection.clone();
+            }
+        } // 读锁自动释放
+
+        // 2. 需要创建新collection，获取写锁
+        let mut collections = self.collections.write().await;
+        
+        // 3. 双检查锁模式（防止在等待写锁期间其他任务已创建）
+        if let Some(collection) = collections.get(collection_id) {
+            return collection.clone();
+        }
+
+        // 4. 创建新collection
+        let new_collection = Arc::new(RwLock::new(CollectionData::new()));
+        collections.insert(collection_id.to_string(), new_collection.clone());
+        
+        new_collection
+    }
+
+    /// 异步存储一个 GeoJSON 对象到指定 Collection
+    pub async fn set(&self, collection_id: &str, item_id: &str, geojson: serde_json::Value) -> Result<()> {
+        // 1. 获取或创建collection
+        let collection = self.get_or_create_collection(collection_id).await;
+        
+        // 2. 获取collection的写锁
+        let mut data = collection.write().await;
+        
+        // 3. 原子更新操作（hashmap + rtree + metadata）
+        let geo_item = GeoItem::new(item_id.to_string(), geojson.clone());
+        
+        // 更新hashmap
+        data.items.insert(item_id.to_string(), geo_item);
+        
+        // 更新rtree（如果启用）
+        // if let Some(ref mut rtree) = data.rtree {
+        //     if let Ok(bbox) = extract_bbox(&geojson) {
+        //         rtree.insert(bbox, item_id.to_string());
+        //     }
+        // }
+        
+        // 更新元数据
+        data.metadata.item_count = data.items.len();
+        data.metadata.last_accessed = std::time::Instant::now();
+        
+        Ok(())
+    }
+
+    /// 异步从指定 Collection 获取一个 GeoJSON 对象
+    pub async fn get(&self, collection_id: &str, item_id: &str) -> Result<Option<GeoItem>> {
+        // 1. 获取collection的引用
+        let collections = self.collections.read().await;
+        let collection = match collections.get(collection_id) {
+            Some(coll) => coll.clone(),
+            None => return Ok(None),
+        };
+        drop(collections); // 早释放外层锁
+
+        // 2. 获取collection数据的读锁
+        let data = collection.read().await;
+        
+        // 3. 读取数据
+        let result = data.items.get(item_id).cloned();
+        
+        Ok(result)
+    }
+
+    /// 异步从指定 Collection 删除一个 GeoJSON 对象
+    pub async fn delete(&self, collection_id: &str, item_id: &str) -> Result<bool> {
+        let collections = self.collections.read().await;
+        let collection = match collections.get(collection_id) {
+            Some(coll) => coll.clone(),
+            None => return Ok(false),
+        };
+        drop(collections);
+
+        let mut data = collection.write().await;
+        
+        // 原子删除操作
+        let removed = data.items.remove(item_id);
+        
+        if removed.is_some() {
+            // 从rtree中删除（如果启用）
+            // if let Some(ref mut rtree) = data.rtree {
+            //     if let Ok(bbox) = extract_bbox(&removed.unwrap().geojson) {
+            //         rtree.remove(&bbox, &item_id.to_string());
+            //     }
+            // }
+            
+            // 更新元数据
+            data.metadata.item_count = data.items.len();
+            data.metadata.last_accessed = std::time::Instant::now();
+            
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// 异步获取所有 Collection 的名称
+    pub async fn collection_names(&self) -> Vec<String> {
+        let collections = self.collections.read().await;
+        collections.keys().cloned().collect()
+    }
+
+    /// 异步删除整个 Collection
+    pub async fn drop_collection(&self, collection_id: &str) -> Result<bool> {
+        let mut collections = self.collections.write().await;
+        Ok(collections.remove(collection_id).is_some())
+    }
+
+    /// 异步获取数据库统计信息
+    pub async fn stats(&self) -> Result<DatabaseStats> {
+        let collections = self.collections.read().await;
+        let mut total_items = 0;
+        
+        // 需要访问每个collection来获取item数量
+        for collection in collections.values() {
+            let data = collection.read().await;
+            total_items += data.metadata.item_count;
+        }
+        
+        Ok(DatabaseStats {
+            collections_count: collections.len(),
+            total_items,
+        })
+    }
+}
+
+/// 数据库统计信息
+#[derive(Debug)]
+pub struct DatabaseStats {
+    pub collections_count: usize,
+    pub total_items: usize,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_collection_basic_operations() {
+        let mut collection_data = CollectionData::new();
+        
+        // 测试存储
+        let point_geojson = json!({
+            "type": "Point",
+            "coordinates": [-122.4194, 37.7749]
+        });
+        
+        let geo_item = GeoItem::new("point1".to_string(), point_geojson.clone());
+        collection_data.items.insert("point1".to_string(), geo_item);
+        assert_eq!(collection_data.items.len(), 1);
+        
+        // 测试获取
+        let item = collection_data.items.get("point1").unwrap();
+        assert_eq!(item.id, "point1");
+        assert_eq!(item.geojson, point_geojson);
+        
+        // 测试删除
+        assert!(collection_data.items.remove("point1").is_some());
+        assert!(collection_data.items.is_empty());
+        assert!(collection_data.items.get("point1").is_none());
+    }
+
+    #[tokio::test]
+    async fn test_database_basic_operations() {
+        let db = GeoDatabase::new();
+        
+        let point_geojson = json!({
+            "type": "Point",
+            "coordinates": [-122.4194, 37.7749]
+        });
+        
+        // 测试存储到新 Collection
+        assert!(db.set("fleet", "truck1", point_geojson.clone()).await.is_ok());
+        
+        // 测试获取
+        let result = db.get("fleet", "truck1").await.unwrap();
+        let item = result.unwrap();
+        assert_eq!(item.geojson, point_geojson);
+        
+        // 测试统计
+        let stats = db.stats().await.unwrap();
+        assert_eq!(stats.collections_count, 1);
+        assert_eq!(stats.total_items, 1);
+        
+        // 测试删除
+        assert!(db.delete("fleet", "truck1").await.unwrap());
+        assert!(db.get("fleet", "truck1").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_multiple_collections() {
+        let db = GeoDatabase::new();
+        
+        let point1 = json!({"type": "Point", "coordinates": [1.0, 2.0]});
+        let point2 = json!({"type": "Point", "coordinates": [3.0, 4.0]});
+        
+        // 存储到不同 Collection
+        db.set("fleet", "truck1", point1).await.unwrap();
+        db.set("sensors", "sensor1", point2).await.unwrap();
+        
+        // 验证数据隔离
+        assert!(db.get("fleet", "truck1").await.unwrap().is_some());
+        assert!(db.get("sensors", "sensor1").await.unwrap().is_some());
+        assert!(db.get("fleet", "sensor1").await.unwrap().is_none());
+        assert!(db.get("sensors", "truck1").await.unwrap().is_none());
+        
+        // 验证统计
+        let stats = db.stats().await.unwrap();
+        assert_eq!(stats.collections_count, 2);
+        assert_eq!(stats.total_items, 2);
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_operations() {
+        let db = std::sync::Arc::new(GeoDatabase::new());
+        
+        let point1 = json!({"type": "Point", "coordinates": [1.0, 2.0]});
+        let point2 = json!({"type": "Point", "coordinates": [3.0, 4.0]});
+        
+        // 并发写入不同collection
+        let db1 = std::sync::Arc::clone(&db);
+        let db2 = std::sync::Arc::clone(&db);
+        
+        let (r1, r2) = tokio::join!(
+            db1.set("fleet", "truck1", point1),
+            db2.set("sensors", "sensor1", point2)
+        );
+        
+        assert!(r1.is_ok());
+        assert!(r2.is_ok());
+        
+        // 并发读取
+        let db3 = std::sync::Arc::clone(&db);
+        let db4 = std::sync::Arc::clone(&db);
+        
+        let (r3, r4) = tokio::join!(
+            db3.get("fleet", "truck1"),
+            db4.get("sensors", "sensor1")
+        );
+        
+        assert!(r3.unwrap().is_some());
+        assert!(r4.unwrap().is_some());
+    }
+}

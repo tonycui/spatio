@@ -4,6 +4,12 @@ use tokio::sync::RwLock;
 use std::sync::Arc;
 use crate::Result;
 
+// 导入 rtree 相关类型
+use rtree::RTree;
+
+// 导入 geo_utils 模块的函数
+use super::geo_utils::{extract_bbox, string_to_data_id};
+
 /// GeoJSON 对象的简化表示
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoItem {
@@ -22,8 +28,8 @@ impl GeoItem {
 pub struct CollectionData {
     pub items: HashMap<String, GeoItem>,
     pub metadata: CollectionMetadata,
-    // 未来rtree集成点
-    pub rtree: Option<()>, // 占位符
+    // R-tree 用于空间索引
+    pub rtree: Option<RTree>,
 }
 
 #[derive(Debug)]
@@ -42,7 +48,7 @@ impl CollectionData {
                 last_accessed: std::time::Instant::now(),
                 item_count: 0,
             },
-            rtree: None,
+            rtree: Some(RTree::new(10)), // 创建 R-tree，最大条目数为 10
         }
     }
 }
@@ -100,11 +106,13 @@ impl GeoDatabase {
         data.items.insert(item_id.to_string(), geo_item);
         
         // 更新rtree（如果启用）
-        // if let Some(ref mut rtree) = data.rtree {
-        //     if let Ok(bbox) = extract_bbox(&geojson) {
-        //         rtree.insert(bbox, item_id.to_string());
-        //     }
-        // }
+        if let Some(ref mut rtree) = data.rtree {
+            if let Ok(bbox) = extract_bbox(&geojson) {
+                // 使用 geo_utils 中的函数生成数据ID
+                let data_id = string_to_data_id(item_id);
+                rtree.insert(bbox, data_id);
+            }
+        }
         
         // 更新元数据
         data.metadata.item_count = data.items.len();
@@ -147,12 +155,14 @@ impl GeoDatabase {
         let removed = data.items.remove(item_id);
         
         if removed.is_some() {
+            let removed_item = removed.unwrap();
             // 从rtree中删除（如果启用）
-            // if let Some(ref mut rtree) = data.rtree {
-            //     if let Ok(bbox) = extract_bbox(&removed.unwrap().geojson) {
-            //         rtree.remove(&bbox, &item_id.to_string());
-            //     }
-            // }
+            if let Some(ref mut rtree) = data.rtree {
+                if let Ok(bbox) = extract_bbox(&removed_item.geojson) {
+                    let data_id = string_to_data_id(item_id);
+                    rtree.delete(&bbox, data_id);
+                }
+            }
             
             // 更新元数据
             data.metadata.item_count = data.items.len();
@@ -311,5 +321,49 @@ mod tests {
         
         assert!(r3.unwrap().is_some());
         assert!(r4.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn test_rtree_integration() {
+        let db = GeoDatabase::new();
+        
+        // 测试不同类型的 GeoJSON 几何体
+        let point = json!({
+            "type": "Point", 
+            "coordinates": [-122.4194, 37.7749]
+        });
+        
+        let linestring = json!({
+            "type": "LineString",
+            "coordinates": [[-122.4194, 37.7749], [-122.4094, 37.7849]]
+        });
+        
+        let polygon = json!({
+            "type": "Polygon",
+            "coordinates": [[
+                [-122.4194, 37.7749],
+                [-122.4094, 37.7849], 
+                [-122.4000, 37.7800],
+                [-122.4194, 37.7749]
+            ]]
+        });
+        
+        // 存储不同类型的几何体
+        assert!(db.set("test", "point1", point.clone()).await.is_ok());
+        assert!(db.set("test", "line1", linestring.clone()).await.is_ok());
+        assert!(db.set("test", "poly1", polygon.clone()).await.is_ok());
+        
+        // 验证数据存储成功
+        assert!(db.get("test", "point1").await.unwrap().is_some());
+        assert!(db.get("test", "line1").await.unwrap().is_some());
+        assert!(db.get("test", "poly1").await.unwrap().is_some());
+        
+        // 测试删除操作（包括从 rtree 中删除）
+        assert!(db.delete("test", "point1").await.unwrap());
+        assert!(db.get("test", "point1").await.unwrap().is_none());
+        
+        // 验证其他数据仍然存在
+        assert!(db.get("test", "line1").await.unwrap().is_some());
+        assert!(db.get("test", "poly1").await.unwrap().is_some());
     }
 }

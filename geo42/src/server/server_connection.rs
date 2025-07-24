@@ -9,13 +9,13 @@ use crate::protocol::parser::RespValue;
 use crate::storage::GeoDatabase;
 use crate::Result;
 
-pub struct Connection {
+pub struct ServerConnection {
     stream: TcpStream,
     registry: CommandRegistry,
     buffer: Vec<u8>,
 }
 
-impl Connection {
+impl ServerConnection {
     pub fn new(stream: TcpStream, database: Arc<GeoDatabase>) -> Self {
         let registry = CommandRegistry::new(database);
         Self {

@@ -1,7 +1,7 @@
-pub mod connection;
-pub mod cli;
+pub mod client_connection;
+pub mod cli_args;
 pub mod formatter;
 
-pub use connection::ClientConnection;
-pub use cli::CliArgs;
+pub use client_connection::ClientConnection;
+pub use cli_args::CliArgs;
 pub use formatter::OutputFormatter;

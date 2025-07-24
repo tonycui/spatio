@@ -1,5 +1,5 @@
 pub mod tcp_server;
-pub mod connection;
+pub mod server_connection;
 
 pub use tcp_server::TcpServer;
-pub use connection::Connection;
+pub use server_connection::ServerConnection;

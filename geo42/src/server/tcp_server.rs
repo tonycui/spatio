@@ -3,7 +3,7 @@ use tracing::{error, info};
 use std::sync::Arc;
 
 use crate::{Config, Result};
-use crate::server::Connection;
+use crate::server::ServerConnection;
 use crate::storage::GeoDatabase;
 
 pub struct TcpServer {
@@ -49,7 +49,7 @@ impl TcpServer {
     }
 
     async fn handle_client(stream: TcpStream, database: Arc<GeoDatabase>) -> Result<()> {
-        let mut connection = Connection::new(stream, database);
+        let mut connection = ServerConnection::new(stream, database);
         connection.handle().await
     }
 }

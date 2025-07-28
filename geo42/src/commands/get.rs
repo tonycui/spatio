@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use crate::commands::Command;
+use crate::commands::args::ArgumentParser;
 use crate::protocol::{RespResponse, parser::RespValue};
 use crate::storage::GeoDatabase;
 use crate::Result;
@@ -21,26 +22,21 @@ impl Command for GetCommand {
 
     fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
         let database = Arc::clone(&self.database);
-        let args = args.to_vec(); // Clone args to move into async block
+        
+        // 同步解析参数
+        let parse_result = ArgumentParser::new(args, "GET").parse_get_args();
         
         async move {
-            // GET collection_id item_id
-            if args.len() != 2 {
-                return Ok(RespResponse::error("ERR wrong number of arguments for 'GET' command"));
-            }
-
-            let collection_id = match &args[0] {
-                RespValue::BulkString(Some(s)) => s,
-                _ => return Ok(RespResponse::error("ERR invalid collection ID")),
+            // 检查参数解析结果
+            let parsed_args = match parse_result {
+                Ok(args) => args,
+                Err(err_msg) => {
+                    return Ok(RespResponse::error(&err_msg));
+                }
             };
-
-            let item_id = match &args[1] {
-                RespValue::BulkString(Some(s)) => s,
-                _ => return Ok(RespResponse::error("ERR invalid item ID")),
-            };
-
-            // 异步从数据库获取
-            match database.get(collection_id, item_id).await {
+            
+            // 只有数据库操作需要异步
+            match database.get(&parsed_args.collection_id, &parsed_args.item_id).await {
                 Ok(Some(item)) => {
                     // 返回 GeoJSON 字符串
                     let geojson_str = item.geojson.to_string();

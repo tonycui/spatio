@@ -1,6 +1,8 @@
 pub mod basic;
 pub mod set;
 pub mod get;
+pub mod args;
+pub mod registry;
 
 use std::sync::Arc;
 
@@ -11,6 +13,10 @@ use crate::Result;
 use basic::{PingCommand, HelloCommand, QuitCommand};
 use set::SetCommand;
 use get::GetCommand;
+
+// 重新导出常用的类型
+pub use args::{ArgumentParser, SetArgs, GetArgs};
+pub use registry::CommandRegistry;
 
 pub trait Command {
     fn name(&self) -> &'static str;
@@ -43,42 +49,6 @@ impl CommandType {
             CommandType::Quit(cmd) => cmd.execute(args).await,
             CommandType::Set(cmd) => cmd.execute(args).await,
             CommandType::Get(cmd) => cmd.execute(args).await,
-        }
-    }
-}
-
-pub struct CommandRegistry {
-    commands: std::collections::HashMap<String, CommandType>,
-}
-
-impl CommandRegistry {
-    pub fn new(database: Arc<GeoDatabase>) -> Self {
-        let mut registry = Self {
-            commands: std::collections::HashMap::new(),
-        };
-        
-        // 注册基础命令
-        registry.register(CommandType::Ping(PingCommand));
-        registry.register(CommandType::Hello(HelloCommand));
-        registry.register(CommandType::Quit(QuitCommand));
-        
-        // 注册存储命令
-        registry.register(CommandType::Set(SetCommand::new(Arc::clone(&database))));
-        registry.register(CommandType::Get(GetCommand::new(Arc::clone(&database))));
-        
-        registry
-    }
-
-    pub fn register(&mut self, command: CommandType) {
-        let name = command.name().to_uppercase();
-        self.commands.insert(name, command);
-    }
-
-    pub async fn execute(&self, command_name: &str, args: &[RespValue]) -> Result<String> {
-        let name = command_name.to_uppercase();
-        match self.commands.get(&name) {
-            Some(command) => command.execute(args).await,
-            None => Ok(format!("-ERR unknown command '{}'\r\n", command_name)),
         }
     }
 }

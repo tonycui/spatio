@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use crate::commands::Command;
+use crate::commands::args::ArgumentParser;
 use crate::protocol::{RespResponse, parser::RespValue};
 use crate::storage::GeoDatabase;
 use crate::Result;
@@ -21,42 +22,21 @@ impl Command for SetCommand {
 
     fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
         let database = Arc::clone(&self.database);
-        let args = args.to_vec(); // Clone args to move into async block
+        
+        // 同步解析参数（不需要在 async 块中）
+        let parse_result = ArgumentParser::new(args, "SET").parse_set_args();
         
         async move {
-            // SET collection_id item_id geojson
-            if args.len() != 3 {
-                return Ok(RespResponse::error("ERR wrong number of arguments for 'SET' command"));
-            }
-
-            let collection_id = match &args[0] {
-                RespValue::BulkString(Some(s)) => s,
-                _ => return Ok(RespResponse::error("ERR invalid collection ID")),
+            // 检查参数解析结果
+            let parsed_args = match parse_result {
+                Ok(args) => args,
+                Err(err_msg) => {
+                    return Ok(RespResponse::error(&err_msg));
+                }
             };
-
-            let item_id = match &args[1] {
-                RespValue::BulkString(Some(s)) => s,
-                _ => return Ok(RespResponse::error("ERR invalid item ID")),
-            };
-
-            let geojson_str = match &args[2] {
-                RespValue::BulkString(Some(s)) => s,
-                _ => return Ok(RespResponse::error("ERR invalid GeoJSON")),
-            };
-
-            // 解析 GeoJSON
-            let geojson: serde_json::Value = match serde_json::from_str(geojson_str) {
-                Ok(json) => json,
-                Err(e) => return Ok(RespResponse::error(&format!("ERR invalid GeoJSON: {}", e))),
-            };
-
-            // 基本 GeoJSON 格式验证
-            if !geojson.is_object() || geojson.get("type").is_none() {
-                return Ok(RespResponse::error("ERR invalid GeoJSON: missing 'type' field"));
-            }
-
-            // 异步存储到数据库
-            match database.set(collection_id, item_id, geojson).await {
+            
+            // 只有 I/O 操作需要异步
+            match database.set(&parsed_args.collection_id, &parsed_args.item_id, parsed_args.geojson).await {
                 Ok(_) => Ok(RespResponse::simple_string("OK")),
                 Err(e) => Ok(RespResponse::error(&format!("ERR failed to store: {}", e))),
             }

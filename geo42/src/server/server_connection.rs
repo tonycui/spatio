@@ -3,7 +3,7 @@ use tokio::net::TcpStream;
 use tracing::{debug, error, info};
 use std::sync::Arc;
 
-use crate::commands::CommandRegistry;
+use crate::commands::registry::CommandRegistry;
 use crate::protocol::{RespParser, RespResponse};
 use crate::protocol::parser::RespValue;
 use crate::storage::GeoDatabase;

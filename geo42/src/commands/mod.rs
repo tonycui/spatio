@@ -4,10 +4,7 @@ pub mod get;
 pub mod args;
 pub mod registry;
 
-use std::sync::Arc;
-
 use crate::protocol::parser::RespValue;
-use crate::storage::GeoDatabase;
 use crate::Result;
 
 use basic::{PingCommand, HelloCommand, QuitCommand};

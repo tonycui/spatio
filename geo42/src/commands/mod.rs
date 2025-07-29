@@ -1,6 +1,7 @@
 pub mod basic;
 pub mod set;
 pub mod get;
+pub mod intersects;
 pub mod args;
 pub mod registry;
 
@@ -10,9 +11,11 @@ use crate::Result;
 use basic::{PingCommand, HelloCommand, QuitCommand};
 use set::SetCommand;
 use get::GetCommand;
+use intersects::IntersectsCommand;
 
 // 重新导出常用的类型
 pub use args::{ArgumentParser, SetArgs, GetArgs};
+pub use intersects::IntersectsArgs;
 pub use registry::CommandRegistry;
 
 pub trait Command {
@@ -26,6 +29,7 @@ pub enum CommandType {
     Quit(QuitCommand),
     Set(SetCommand),
     Get(GetCommand),
+    Intersects(IntersectsCommand),
 }
 
 impl CommandType {
@@ -36,6 +40,7 @@ impl CommandType {
             CommandType::Quit(cmd) => cmd.name(),
             CommandType::Set(cmd) => cmd.name(),
             CommandType::Get(cmd) => cmd.name(),
+            CommandType::Intersects(cmd) => cmd.name(),
         }
     }
 
@@ -46,6 +51,7 @@ impl CommandType {
             CommandType::Quit(cmd) => cmd.execute(args).await,
             CommandType::Set(cmd) => cmd.execute(args).await,
             CommandType::Get(cmd) => cmd.execute(args).await,
+            CommandType::Intersects(cmd) => cmd.execute(args).await,
         }
     }
 }

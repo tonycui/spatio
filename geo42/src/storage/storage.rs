@@ -1,3 +1,23 @@
+//! # 地理数据库存储层
+//! 
+//! ## 架构设计说明
+//! 
+//! ### 为什么使用同步 RTree 而不是 AsyncConcurrentRTree？
+//! 
+//! 1. **两层锁架构**: GeoDatabase 使用两层锁设计
+//!    - 外层: 管理 collections 的并发访问
+//!    - 内层: 管理单个 collection 内数据的并发访问
+//! 
+//! 2. **合适的并发粒度**: Collection 级别的并发已经足够
+//!    - 不同 collection (如 fleet/sensors) 可以完全并发操作
+//!    - 同一 collection 内的操作串行化保证数据一致性
+//! 
+//! 3. **性能考虑**: RTree 操作在锁保护下执行
+//!    - insert/delete/search 都是 O(log n) 操作，通常微秒级完成
+//!    - 同步操作避免了异步锁的额外开销
+//!    - 无需 AsyncConcurrentRTree 的复杂性
+//! todo: 不确定 rtree 是否需要异步化,异步化是否会带来性能的提升？
+
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;

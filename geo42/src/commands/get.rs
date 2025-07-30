@@ -39,7 +39,7 @@ impl Command for GetCommand {
             match database.get(&parsed_args.collection_id, &parsed_args.item_id).await {
                 Ok(Some(item)) => {
                     // 返回 GeoJSON 字符串
-                    let geojson_str = item.geojson.to_string();
+                    let geojson_str = item.to_geojson().to_string();
                     Ok(RespResponse::bulk_string(Some(&geojson_str)))
                 }
                 Ok(None) => Ok(RespResponse::bulk_string(None)),

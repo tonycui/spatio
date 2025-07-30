@@ -23,24 +23,36 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use std::sync::Arc;
 use crate::Result;
+use geo::Geometry;
 
 // 导入 rtree 相关类型
 use rtree::RTree;
 
 // 导入 geo_utils 模块的函数
 use super::geo_utils::{extract_bbox, string_to_data_id};
-use super::geometry_utils::{geojson_to_geometry, geometries_intersect};
+use super::geometry_utils::{geojson_to_geometry, geometries_intersect, geometry_to_geojson};
 
-/// GeoJSON 对象的简化表示
+/// 优化的 GeoJSON 对象表示 - 存储解析后的几何体
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoItem {
     pub id: String,
-    pub geojson: serde_json::Value,
+    pub geometry: Geometry,  // 直接存储 geo::Geometry，避免查询时重复转换
 }
 
 impl GeoItem {
-    pub fn new(id: String, geojson: serde_json::Value) -> Self {
-        Self { id, geojson }
+    pub fn new(id: String, geojson: serde_json::Value) -> Result<Self> {
+        let geometry = geojson_to_geometry(&geojson)
+            .map_err(|e| Box::new(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid GeoJSON: {}", e)
+            )) as Box<dyn std::error::Error + Send + Sync>)?;
+        
+        Ok(Self { id, geometry })
+    }
+    
+    /// 将内部几何体转换为 GeoJSON 格式返回给客户端
+    pub fn to_geojson(&self) -> serde_json::Value {
+        geometry_to_geojson(&self.geometry)
     }
 }
 
@@ -121,7 +133,7 @@ impl GeoDatabase {
         let mut data = collection.write().await;
         
         // 3. 原子更新操作（hashmap + rtree + metadata）
-        let geo_item = GeoItem::new(item_id.to_string(), geojson.clone());
+        let geo_item = GeoItem::new(item_id.to_string(), geojson.clone())?;
         
         // 更新hashmap
         data.items.insert(item_id.to_string(), geo_item);
@@ -179,7 +191,9 @@ impl GeoDatabase {
             let removed_item = removed.unwrap();
             // 从rtree中删除（如果启用）
             if let Some(ref mut rtree) = data.rtree {
-                if let Ok(bbox) = extract_bbox(&removed_item.geojson) {
+                // 将几何体转换为 GeoJSON 来提取边界框
+                let geojson = geometry_to_geojson(&removed_item.geometry);
+                if let Ok(bbox) = extract_bbox(&geojson) {
                     let data_id = string_to_data_id(item_id);
                     rtree.delete(&bbox, data_id);
                 }
@@ -257,18 +271,9 @@ impl GeoDatabase {
             for (item_id, item) in &data.items {
                 let data_id = string_to_data_id(item_id);
                 if candidate_set.contains(&data_id) {
-                    // 精确几何相交测试
-                    match geojson_to_geometry(&item.geojson) {
-                        Ok(item_geometry) => {
-                            if geometries_intersect(&query_geometry, &item_geometry) {
-                                results.push(item.clone());
-                            }
-                        }
-                        Err(_) => {
-                            // 如果项目几何体无效，跳过
-                            // TODO: 添加日志记录
-                            continue;
-                        }
+                    // 精确几何相交测试 - 直接使用存储的几何体，无需转换！
+                    if geometries_intersect(&query_geometry, &item.geometry) {
+                        results.push(item.clone());
                     }
                 }
             }
@@ -303,14 +308,14 @@ mod tests {
             "coordinates": [-122.4194, 37.7749]
         });
         
-        let geo_item = GeoItem::new("point1".to_string(), point_geojson.clone());
+        let geo_item = GeoItem::new("point1".to_string(), point_geojson.clone()).unwrap();
         collection_data.items.insert("point1".to_string(), geo_item);
         assert_eq!(collection_data.items.len(), 1);
         
         // 测试获取
         let item = collection_data.items.get("point1").unwrap();
         assert_eq!(item.id, "point1");
-        assert_eq!(item.geojson, point_geojson);
+        assert_eq!(item.to_geojson(), point_geojson);
         
         // 测试删除
         assert!(collection_data.items.remove("point1").is_some());
@@ -333,7 +338,7 @@ mod tests {
         // 测试获取
         let result = db.get("fleet", "truck1").await.unwrap();
         let item = result.unwrap();
-        assert_eq!(item.geojson, point_geojson);
+        assert_eq!(item.to_geojson(), point_geojson);
         
         // 测试统计
         let stats = db.stats().await.unwrap();

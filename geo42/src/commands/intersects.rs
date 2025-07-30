@@ -46,7 +46,7 @@ impl Command for IntersectsCommand {
                         let resp_values: Vec<RespValue> = results
                             .into_iter()
                             .map(|item| {
-                                let geojson_str = item.geojson.to_string();
+                                let geojson_str = item.to_geojson().to_string();
                                 RespValue::BulkString(Some(geojson_str))
                             })
                             .collect();

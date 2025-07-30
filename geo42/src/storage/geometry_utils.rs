@@ -174,6 +174,107 @@ pub fn geometries_haversine_distance(geom1: &Geometry<f64>, geom2: &Geometry<f64
     geometries_distance(geom1, geom2)
 }
 
+/// 将 geo::Geometry 转换为 serde_json::Value (GeoJSON)
+pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
+    use serde_json::json;
+    
+    match geometry {
+        Geometry::Point(point) => {
+            json!({
+                "type": "Point",
+                "coordinates": [point.x(), point.y()]
+            })
+        }
+        Geometry::LineString(line) => {
+            let coords: Vec<Vec<f64>> = line.coords()
+                .map(|coord| vec![coord.x, coord.y])
+                .collect();
+            json!({
+                "type": "LineString",
+                "coordinates": coords
+            })
+        }
+        Geometry::Polygon(polygon) => {
+            let mut rings: Vec<Vec<Vec<f64>>> = Vec::new();
+            
+            // 外环
+            let exterior: Vec<Vec<f64>> = polygon.exterior().coords()
+                .map(|coord| vec![coord.x, coord.y])
+                .collect();
+            rings.push(exterior);
+            
+            // 内环
+            for interior in polygon.interiors() {
+                let interior_coords: Vec<Vec<f64>> = interior.coords()
+                    .map(|coord| vec![coord.x, coord.y])
+                    .collect();
+                rings.push(interior_coords);
+            }
+            
+            json!({
+                "type": "Polygon",
+                "coordinates": rings
+            })
+        }
+        Geometry::MultiPoint(multi_point) => {
+            let coords: Vec<Vec<f64>> = multi_point.iter()
+                .map(|point| vec![point.x(), point.y()])
+                .collect();
+            json!({
+                "type": "MultiPoint",
+                "coordinates": coords
+            })
+        }
+        Geometry::MultiLineString(multi_line) => {
+            let coords: Vec<Vec<Vec<f64>>> = multi_line.iter()
+                .map(|line| {
+                    line.coords()
+                        .map(|coord| vec![coord.x, coord.y])
+                        .collect()
+                })
+                .collect();
+            json!({
+                "type": "MultiLineString",
+                "coordinates": coords
+            })
+        }
+        Geometry::MultiPolygon(multi_polygon) => {
+            let coords: Vec<Vec<Vec<Vec<f64>>>> = multi_polygon.iter()
+                .map(|polygon| {
+                    let mut rings: Vec<Vec<Vec<f64>>> = Vec::new();
+                    
+                    // 外环
+                    let exterior: Vec<Vec<f64>> = polygon.exterior().coords()
+                        .map(|coord| vec![coord.x, coord.y])
+                        .collect();
+                    rings.push(exterior);
+                    
+                    // 内环
+                    for interior in polygon.interiors() {
+                        let interior_coords: Vec<Vec<f64>> = interior.coords()
+                            .map(|coord| vec![coord.x, coord.y])
+                            .collect();
+                        rings.push(interior_coords);
+                    }
+                    
+                    rings
+                })
+                .collect();
+            json!({
+                "type": "MultiPolygon",
+                "coordinates": coords
+            })
+        }
+        _ => {
+            // 对于其他几何类型，返回一个占位符
+            json!({
+                "type": "GeometryCollection",
+                "geometries": []
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -46,9 +46,8 @@ impl Command for IntersectsCommand {
                         let mut resp_values = Vec::with_capacity(results.len());
                         
                         for item in results {
-                            // 优化：直接将geometry转换为字符串，避免中间serde_json::Value分配
-                            let geojson_str = item.to_geojson().to_string();
-                            resp_values.push(RespValue::BulkString(Some(geojson_str)));
+                            // 优化：直接使用缓存的 GeoJSON 字符串，零序列化开销
+                            resp_values.push(RespValue::BulkString(Some(item.get_geojson_string().to_string())));
                         }
                         
                         Ok(RespResponse::array(Some(&resp_values)))

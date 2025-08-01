@@ -32,16 +32,25 @@ use rtree::RTree;
 use super::geo_utils::{string_to_data_id, geometry_to_bbox};
 use super::geometry_utils::{geometries_intersect, geometry_to_geojson};
 
-/// 优化的 GeoJSON 对象表示 - 存储解析后的几何体
+/// 优化的 GeoJSON 对象表示 - 存储解析后的几何体和缓存的序列化字符串
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoItem {
     pub id: String,
     pub geometry: Geometry,  // 直接存储 geo::Geometry，避免查询时重复转换
+    pub geojson_str: String, // 缓存序列化后的 GeoJSON 字符串，避免重复序列化
 }
 
 impl GeoItem {
     pub fn new(id: String, geometry: Geometry) -> Result<Self> {
-        Ok(Self { id, geometry })
+        // 在创建时就序列化一次，后续直接使用缓存
+        let geojson = geometry_to_geojson(&geometry);
+        let geojson_str = geojson.to_string();
+        
+        Ok(Self { 
+            id, 
+            geometry,
+            geojson_str,
+        })
     }
 
     // pub fn new_from_geojson(id: String, geojson: serde_json::Value) -> Result<Self> {
@@ -57,6 +66,12 @@ impl GeoItem {
     /// 将内部几何体转换为 GeoJSON 格式返回给客户端
     pub fn to_geojson(&self) -> serde_json::Value {
         geometry_to_geojson(&self.geometry)
+    }
+    
+    /// 获取缓存的 GeoJSON 字符串 - 零成本访问
+    #[inline]
+    pub fn get_geojson_string(&self) -> &str {
+        &self.geojson_str
     }
 }
 

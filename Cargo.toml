@@ -5,3 +5,10 @@ members = [
     "geo42"
 ]
 resolver = "2"
+
+[profile.release]
+debug = "full"        # 完整调试信息
+strip = false
+lto = false
+opt-level = 1
+codegen-units = 1

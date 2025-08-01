@@ -103,8 +103,8 @@ class Geo42Benchmark:
         # 插入数据
         self.insert_data_geo42(test_data)
         
-        print("等待 3 秒...")
-        time.sleep(3)
+        # print("等待 3 秒...")
+        # time.sleep(3)
         
         # geo42 查询测试
         print("开始 geo42 查询测试...")
@@ -139,4 +139,4 @@ class Geo42Benchmark:
 
 if __name__ == "__main__":
     benchmark = Geo42Benchmark()
-    benchmark.run_benchmark(data_count=100000, query_count=100)
+    benchmark.run_benchmark(data_count=100000, query_count=10000)

@@ -42,14 +42,14 @@ impl Command for IntersectsCommand {
                     if results.is_empty() {
                         Ok(RespResponse::array(None))
                     } else {
-                        // 转换为 RespValue 数组
-                        let resp_values: Vec<RespValue> = results
-                            .into_iter()
-                            .map(|item| {
-                                let geojson_str = item.to_geojson().to_string();
-                                RespValue::BulkString(Some(geojson_str))
-                            })
-                            .collect();
+                        // 优化：预分配容量，避免Vec动态扩容
+                        let mut resp_values = Vec::with_capacity(results.len());
+                        
+                        for item in results {
+                            // 优化：直接将geometry转换为字符串，避免中间serde_json::Value分配
+                            let geojson_str = item.to_geojson().to_string();
+                            resp_values.push(RespValue::BulkString(Some(geojson_str)));
+                        }
                         
                         Ok(RespResponse::array(Some(&resp_values)))
                     }
@@ -65,22 +65,6 @@ impl Command for IntersectsCommand {
 pub struct IntersectsArgs {
     pub collection_id: String,
     pub geometry: serde_json::Value,
-}
-
-// 为 ArgumentParser 添加 INTERSECTS 解析方法
-impl<'a> ArgumentParser<'a> {
-    pub fn parse_intersects_args(&self) -> std::result::Result<IntersectsArgs, String> {
-        // 检查参数数量：INTERSECTS collection_id geometry
-        self.check_arg_count(2)?;
-
-        let collection_id = self.get_string(0, "collection ID")?;
-        let geometry = self.get_geojson(1)?;
-        
-        Ok(IntersectsArgs {
-            collection_id: collection_id.to_string(),
-            geometry,
-        })
-    }
 }
 
 #[cfg(test)]
@@ -106,9 +90,15 @@ mod tests {
             "coordinates": [15.0, 15.0]
         });
         
-        database.set("fleet", "vehicle1", point1).await.unwrap();
-        database.set("fleet", "vehicle2", point2).await.unwrap();
-        database.set("fleet", "vehicle3", point3).await.unwrap();
+        // 转换为 geo::Geometry
+        use crate::storage::geometry_utils::geojson_to_geometry;
+        let geom1 = geojson_to_geometry(&point1).unwrap();
+        let geom2 = geojson_to_geometry(&point2).unwrap();
+        let geom3 = geojson_to_geometry(&point3).unwrap();
+        
+        database.set("fleet", "vehicle1", geom1).await.unwrap();
+        database.set("fleet", "vehicle2", geom2).await.unwrap();
+        database.set("fleet", "vehicle3", geom3).await.unwrap();
 
         let cmd = IntersectsCommand::new(Arc::clone(&database));
 

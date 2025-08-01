@@ -36,7 +36,7 @@ impl Command for SetCommand {
             };
             
             // 只有 I/O 操作需要异步
-            match database.set(&parsed_args.collection_id, &parsed_args.item_id, parsed_args.geojson).await {
+            match database.set(&parsed_args.collection_id, &parsed_args.item_id, parsed_args.geometry).await {
                 Ok(_) => Ok(RespResponse::simple_string("OK")),
                 Err(e) => Ok(RespResponse::error(&format!("ERR failed to store: {}", e))),
             }
@@ -72,7 +72,7 @@ mod tests {
         let item_result = database.get("fleet", "truck1").await.unwrap();
         let item = item_result.unwrap();
         assert_eq!(item.id, "truck1");
-        assert_eq!(item.geojson["type"], "Point");
+        assert!(matches!(item.geometry, geo::Geometry::Point(_)));
     }
 
     #[tokio::test]

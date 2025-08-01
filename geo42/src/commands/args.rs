@@ -1,4 +1,6 @@
 use crate::protocol::parser::RespValue;
+use geo::Geometry;
+use crate::storage::geometry_utils::geojson_to_geometry;
 
 /// 参数解析工具
 pub struct ArgumentParser<'a> {
@@ -45,6 +47,19 @@ impl<'a> ArgumentParser<'a> {
         Ok(geojson)
     }
 
+    /// 获取并解析 Geometry 参数（直接转换，无中转）
+    pub fn get_geometry(&self, index: usize) -> std::result::Result<Geometry, String> {
+        let geojson_str = self.get_string(index, "GeoJSON")?;
+        
+        // 解析为 JSON
+        let geojson_value: serde_json::Value = serde_json::from_str(geojson_str)
+            .map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
+        
+        // 直接转换为 geo::Geometry
+        geojson_to_geometry(&geojson_value)
+            .map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
+    }
+
     /// 验证 GeoJSON 基本格式
     fn validate_geojson(&self, geojson: &serde_json::Value) -> std::result::Result<(), String> {
         if !geojson.is_object() {
@@ -64,12 +79,12 @@ impl<'a> ArgumentParser<'a> {
         
         let collection_id = self.get_string(0, "collection ID")?;
         let item_id = self.get_string(1, "item ID")?;
-        let geojson = self.get_geojson(2)?;
+        let geometry = self.get_geometry(2)?;
         
         Ok(SetArgs {
             collection_id: collection_id.to_string(),
             item_id: item_id.to_string(),
-            geojson,
+            geometry,
         })
     }
 
@@ -85,6 +100,19 @@ impl<'a> ArgumentParser<'a> {
             item_id: item_id.to_string(),
         })
     }
+
+    /// 解析 INTERSECTS 命令的参数
+    pub fn parse_intersects_args(&self) -> std::result::Result<IntersectsArgs, String> {
+        self.check_arg_count(2)?;
+        
+        let collection_id = self.get_string(0, "collection ID")?;
+        let geometry = self.get_geometry(1)?;
+        
+        Ok(IntersectsArgs {
+            collection_id: collection_id.to_string(),
+            geometry,
+        })
+    }
 }
 
 /// SET 命令的解析结果
@@ -92,7 +120,7 @@ impl<'a> ArgumentParser<'a> {
 pub struct SetArgs {
     pub collection_id: String,
     pub item_id: String,
-    pub geojson: serde_json::Value,
+    pub geometry: Geometry,
 }
 
 /// GET 命令的解析结果
@@ -100,6 +128,13 @@ pub struct SetArgs {
 pub struct GetArgs {
     pub collection_id: String,
     pub item_id: String,
+}
+
+/// INTERSECTS 命令的解析结果
+#[derive(Debug)]
+pub struct IntersectsArgs {
+    pub collection_id: String,
+    pub geometry: Geometry,
 }
 
 #[cfg(test)]
@@ -122,7 +157,11 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
         assert_eq!(parsed.item_id, "truck1");
-        assert_eq!(parsed.geojson["type"], "Point");
+        // 验证 geometry 而不是 geojson
+        match parsed.geometry {
+            Geometry::Point(_) => {},
+            _ => panic!("Expected Point geometry"),
+        }
     }
 
     #[test]

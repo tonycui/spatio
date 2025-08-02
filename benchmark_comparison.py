@@ -110,8 +110,8 @@ class GeoBenchmark:
         """tile38 intersects 查询"""
         start_time = time.time()
         
-        # tile38 INTERSECTS 命令格式: INTERSECTS collection_name OBJECT geojson
-        self.tile38_client.execute_command("INTERSECTS", self.collection_name, "OBJECT", json.dumps(geometry))
+        # tile38 INTERSECTS 命令格式: INTERSECTS collection_name LIMIT 100000 OBJECT geojson  
+        self.tile38_client.execute_command("INTERSECTS", self.collection_name, "LIMIT", "100000", "OBJECT", json.dumps(geometry))
         
         end_time = time.time()
         return end_time - start_time
@@ -185,4 +185,4 @@ class GeoBenchmark:
 
 if __name__ == "__main__":
     benchmark = GeoBenchmark()
-    benchmark.run_benchmark(data_count=100000, query_count=100)
+    benchmark.run_benchmark(data_count=100000, query_count=10000)

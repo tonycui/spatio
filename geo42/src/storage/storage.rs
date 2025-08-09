@@ -282,7 +282,7 @@ impl GeoDatabase {
             
             // 第一阶段：边界框粗过滤 - 从geometry计算bbox
             let bbox = geometry_to_bbox(geometry)?;
-            let candidate_ids = rtree.search(&bbox);
+            let candidate_ids = rtree.search_bbox(&bbox);
             
             // 第二阶段：精确几何相交测试
             let mut results = Vec::new();

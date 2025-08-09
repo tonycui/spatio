@@ -377,7 +377,7 @@ mod tests {
         assert!(rtree.geometry_map.contains_key(&3));
         
         // 验证空间查询结果
-        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        let search_all = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
         assert_eq!(search_all.len(), 2);
         assert!(search_all.contains(&1));
         assert!(!search_all.contains(&2));
@@ -452,7 +452,7 @@ mod tests {
         }
         
         // 验证空间查询结果
-        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
+        let search_all = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(search_all.len(), 3);
         assert!(search_all.contains(&1));
         assert!(!search_all.contains(&2));
@@ -491,7 +491,7 @@ mod tests {
         assert!(rtree.is_empty());
         
         // 验证空间查询返回空结果
-        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
         assert!(search_results.is_empty());
     }
 
@@ -530,7 +530,7 @@ mod tests {
         assert!(!rtree.geometry_map.contains_key(&1));
         assert!(rtree.geometry_map.contains_key(&2));
         
-        let search_results = rtree.search(&Rectangle::new(5.0, 5.0, 8.0, 8.0));
+        let search_results = rtree.search_bbox(&Rectangle::new(5.0, 5.0, 8.0, 8.0));
         assert!(search_results.contains(&2));
         assert!(!search_results.contains(&1));
     }
@@ -594,7 +594,7 @@ mod tests {
         assert_eq!(rtree.len(), 2);
         
         // 验证剩余条目仍然存在
-        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 30.0, 30.0));
+        let search_all = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 30.0, 30.0));
         assert!(search_all.contains(&1));
         assert!(!search_all.contains(&2));
         assert!(search_all.contains(&3));
@@ -623,7 +623,7 @@ mod tests {
         assert_eq!(rtree.len(), 3);
         
         // 验证删除后搜索不到该条目
-        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
+        let search_all = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
         assert!(search_all.contains(&1));
         assert!(!search_all.contains(&2));
         assert!(search_all.contains(&3));
@@ -659,7 +659,7 @@ mod tests {
         
         // 验证所有条目都在
         for i in 0..10 {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
             println!("Before deletion - Entry {}: found = {}", i, search_results.contains(&i));
         }
         
@@ -680,7 +680,7 @@ mod tests {
         
         // 验证剩余条目
         for i in 5..10 {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
             println!("After deletion - Entry {}: found = {}", i, search_results.contains(&i));
         }
     }
@@ -714,12 +714,12 @@ mod tests {
         // 验证剩余条目仍然可以找到
         let remaining_data = vec![1, 4, 5];
         for &data in &remaining_data {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
             assert!(search_results.contains(&data), "Entry {} should still be findable after deletions", data);
         }
         
         // 验证删除的条目不存在
-        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+        let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
         assert!(!search_results.contains(&2));
         assert!(!search_results.contains(&3));
     }
@@ -742,7 +742,7 @@ mod tests {
         
         // 验证插入后所有条目都存在
         for (id, _) in &geometries {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
             assert!(search_results.contains(id));
         }
         
@@ -754,11 +754,11 @@ mod tests {
         for (id, _) in &geometries {
             if *id == 2 {
                 // 被删除的条目应该找不到
-                let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+                let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
                 assert!(!search_results.contains(id));
             } else {
                 // 其他条目应该仍然能找到（即使可能被重新插入了）
-                let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+                let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
                 assert!(search_results.contains(id), "Entry {} should still be found after underflow handling", id);
             }
         }
@@ -786,7 +786,7 @@ mod tests {
         
         // 记录插入前每个条目的搜索结果
         for (id, _) in &geometries {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
             assert!(search_results.contains(id));
         }
         
@@ -796,7 +796,7 @@ mod tests {
         
         // 验证重新插入的正确性
         for (id, _) in &geometries {
-            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
+            let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
             if *id == 2 {
                 // 被删除的条目应该找不到
                 assert!(!search_results.contains(id), "Deleted entry {} should not be found", id);
@@ -807,7 +807,7 @@ mod tests {
         }
         
         // 额外验证：使用扩大的搜索区域确保没有条目丢失
-        let wide_search = rtree.search(&Rectangle::new(-1.0, -1.0, 30.0, 3.0));
+        let wide_search = rtree.search_bbox(&Rectangle::new(-1.0, -1.0, 30.0, 3.0));
         let expected_remaining = vec![1, 10, 11, 20, 21];
         for &expected in &expected_remaining {
             assert!(wide_search.contains(&expected), "Entry {} should be in wide search results", expected);
@@ -841,7 +841,7 @@ mod tests {
         assert_eq!(rtree.len(), 3);
         
         // 验证剩余条目仍然可以找到
-        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
         assert!(search_results.contains(&1), "Entry 1 should still exist");
         assert!(search_results.contains(&3), "Entry 3 should still exist");
         assert!(search_results.contains(&4), "Entry 4 should still exist");
@@ -869,7 +869,7 @@ mod tests {
         
         // 验证树仍然有效
         assert_eq!(rtree.len(), 1);
-        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 5.0, 2.0));
+        let search_results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 5.0, 2.0));
         assert!(search_results.contains(&2));
         assert!(!search_results.contains(&1));
         

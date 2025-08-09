@@ -256,7 +256,7 @@ mod tests {
         
         // 验证空间查询能找到该数据 - 使用点的边界框
         let search_rect = Rectangle::new(3.0, 7.0, 3.0, 7.0);
-        let search_results = rtree.search(&search_rect);
+        let search_results = rtree.search_bbox(&search_rect);
         assert!(search_results.contains(&data_id));
     }
 
@@ -279,17 +279,17 @@ mod tests {
         
         // 验证能够通过计算出的边界框范围进行空间查询
         let search_rect = Rectangle::new(0.5, 0.5, 5.5, 4.5); // 包含整个多边形
-        let results = rtree.search(&search_rect);
+        let results = rtree.search_bbox(&search_rect);
         assert!(results.contains(&data_id));
         
         // 验证不包含多边形的查询范围不会找到该数据
         let no_overlap_rect = Rectangle::new(10.0, 10.0, 15.0, 15.0);
-        let no_results = rtree.search(&no_overlap_rect);
+        let no_results = rtree.search_bbox(&no_overlap_rect);
         assert!(!no_results.contains(&data_id));
         
         // 验证部分重叠的查询范围能找到该数据
         let partial_overlap_rect = Rectangle::new(2.0, 2.0, 3.0, 3.0); // 部分重叠
-        let partial_results = rtree.search(&partial_overlap_rect);
+        let partial_results = rtree.search_bbox(&partial_overlap_rect);
         assert!(partial_results.contains(&data_id));
     }
 

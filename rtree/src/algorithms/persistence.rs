@@ -190,8 +190,8 @@ mod tests {
         
         // 验证搜索结果一致
         let search_rect = Rectangle::new(0.5, 0.5, 2.5, 2.5);
-        let original_results = original_rtree.search(&search_rect);
-        let loaded_results = loaded_rtree.search(&search_rect);
+        let original_results = original_rtree.search_bbox(&search_rect);
+        let loaded_results = loaded_rtree.search_bbox(&search_rect);
         assert_eq!(original_results.len(), loaded_results.len());
     }
     
@@ -221,8 +221,8 @@ mod tests {
         
         // 验证搜索结果一致
         let search_rect = Rectangle::new(0.5, 0.5, 2.5, 2.5);
-        let original_results = original_rtree.search(&search_rect);
-        let loaded_results = loaded_rtree.search(&search_rect);
+        let original_results = original_rtree.search_bbox(&search_rect);
+        let loaded_results = loaded_rtree.search_bbox(&search_rect);
         assert_eq!(original_results.len(), loaded_results.len());
     }
     

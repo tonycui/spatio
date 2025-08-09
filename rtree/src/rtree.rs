@@ -141,6 +141,14 @@ impl RTree {
         self.min_entries
     }
 
+    pub fn get_geometry(&self, data_id: i32) -> Option<&Geometry> {
+        self.geometry_map.get(&data_id)
+    }
+
+    pub fn get_geojson(&self, data_id: i32) -> Option<&String> {
+        self.geojson_map.get(&data_id)
+    }
+
     /// 导出树结构为JSON格式
     /// 
     /// 返回包含完整树结构的JSON字符串，用于前端可视化
@@ -215,16 +223,59 @@ mod tests {
 
     #[test]
     fn test_rtree_search() {
+        use geo::{Geometry, Polygon, Coord};
+        
         let mut rtree = RTree::new(4);
         
-        // 插入一些矩形
-        rtree.insert(Rectangle::new(0.0, 0.0, 10.0, 10.0), 1);
-        rtree.insert(Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
-        rtree.insert(Rectangle::new(20.0, 20.0, 30.0, 30.0), 3);
+        // 插入一些几何体
+        let rect1 = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: 0.0, y: 0.0 },
+                Coord { x: 10.0, y: 0.0 },
+                Coord { x: 10.0, y: 10.0 },
+                Coord { x: 0.0, y: 10.0 },
+                Coord { x: 0.0, y: 0.0 }
+            ].into(),
+            vec![]
+        ));
+        let rect2 = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: 5.0, y: 5.0 },
+                Coord { x: 15.0, y: 5.0 },
+                Coord { x: 15.0, y: 15.0 },
+                Coord { x: 5.0, y: 15.0 },
+                Coord { x: 5.0, y: 5.0 }
+            ].into(),
+            vec![]
+        ));
+        let rect3 = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: 20.0, y: 20.0 },
+                Coord { x: 30.0, y: 20.0 },
+                Coord { x: 30.0, y: 30.0 },
+                Coord { x: 20.0, y: 30.0 },
+                Coord { x: 20.0, y: 20.0 }
+            ].into(),
+            vec![]
+        ));
+        
+        rtree.insert_geometry(1, rect1);
+        rtree.insert_geometry(2, rect2);
+        rtree.insert_geometry(3, rect3);
         
         // 搜索相交的矩形
         let query = Rectangle::new(8.0, 8.0, 12.0, 12.0);
-        let results = rtree.search(&query);
+        let query_geom = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: 8.0, y: 8.0 },
+                Coord { x: 12.0, y: 8.0 },
+                Coord { x: 12.0, y: 12.0 },
+                Coord { x: 8.0, y: 12.0 },
+                Coord { x: 8.0, y: 8.0 }
+            ].into(),
+            vec![]
+        ));
+        let results = rtree.search(&query, &query_geom);
         
         // 应该找到数据 1 和 2
         assert!(results.contains(&1));
@@ -233,19 +284,32 @@ mod tests {
         
         // 搜索不相交的区域
         let query2 = Rectangle::new(50.0, 50.0, 60.0, 60.0);
-        let results2 = rtree.search(&query2);
+        let query_geom2 = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: 50.0, y: 50.0 },
+                Coord { x: 60.0, y: 50.0 },
+                Coord { x: 60.0, y: 60.0 },
+                Coord { x: 50.0, y: 60.0 },
+                Coord { x: 50.0, y: 50.0 }
+            ].into(),
+            vec![]
+        ));
+        let results2 = rtree.search(&query2, &query_geom2);
         assert!(results2.is_empty());
     }
 
     #[test]
     fn test_rtree_multiple_insert() {
+        use geo::{Geometry, Point, Polygon, Coord};
+        
         let mut rtree = RTree::new(4);
         
-        // 插入多个矩形
+        // 插入多个点
         for i in 0..10 {
             let x = i as f64 * 2.0;
             let y = i as f64 * 2.0;
-            rtree.insert(Rectangle::new(x, y, x + 1.0, y + 1.0), i);
+            let point = Geometry::Point(Point::new(x, y));
+            rtree.insert_geometry(i, point);
             println!("Inserted {}: current len = {}, depth = {}", i, rtree.len(), rtree.depth());
         }
         
@@ -255,7 +319,17 @@ mod tests {
         
         // 搜索所有数据
         let query = Rectangle::new(-1.0, -1.0, 100.0, 100.0);
-        let results = rtree.search(&query);
+        let query_geom = Geometry::Polygon(Polygon::new(
+            vec![
+                Coord { x: -1.0, y: -1.0 },
+                Coord { x: 100.0, y: -1.0 },
+                Coord { x: 100.0, y: 100.0 },
+                Coord { x: -1.0, y: 100.0 },
+                Coord { x: -1.0, y: -1.0 }
+            ].into(),
+            vec![]
+        ));
+        let results = rtree.search(&query, &query_geom);
         println!("Search results: {:?}", results);
         // 暂时注释掉这个断言
         // assert_eq!(results.len(), 10);

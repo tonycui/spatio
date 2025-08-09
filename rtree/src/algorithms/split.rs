@@ -338,7 +338,7 @@ mod tests {
         }
         
         // 搜索应该仍然工作
-        let results = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
+        let results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(results.len(), 4);
         assert!(results.contains(&1));
         assert!(results.contains(&2));

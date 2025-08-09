@@ -8,5 +8,3 @@ pub use rectangle::Rectangle;
 pub use node::{Node, Entry};
 pub use rtree::RTree;
 
-// 并发版本
-pub use algorithms::concurrent::{ConcurrentRTree, ConcurrentError};

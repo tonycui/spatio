@@ -154,7 +154,7 @@ fn bench_remove(c: &mut Criterion) {
                 let half_size = config.size / 2;
                 for i in 0..half_size {
                     let (rect, data) = &test_data[i];
-                    rtree.delete(rect, *data);
+                    rtree.delete(*data);
                 }
                 rtree
             },
@@ -212,7 +212,7 @@ fn bench_remove_all(c: &mut Criterion) {
             |mut rtree| {
                 // Benchmark: 删除所有数据
                 for (rect, data) in &test_data {
-                    rtree.delete(rect, *data);
+                    rtree.delete(*data);
                 }
                 rtree
             },

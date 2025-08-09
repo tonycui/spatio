@@ -21,7 +21,7 @@ class Geo42Benchmark:
         }
         
         # Redis 连接
-        self.geo42_client = redis.Redis(host='localhost', port=9851, decode_responses=True)
+        self.geo42_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
         self.collection_name = "benchmark_collection"
     
     def generate_random_polygon_in_singapore(self) -> Dict[str, Any]:
@@ -139,4 +139,4 @@ class Geo42Benchmark:
 
 if __name__ == "__main__":
     benchmark = Geo42Benchmark()
-    benchmark.run_benchmark(data_count=100000, query_count=10000)
+    benchmark.run_benchmark(data_count=100000, query_count=1000)

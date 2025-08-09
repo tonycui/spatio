@@ -21,7 +21,8 @@ pub enum ConcurrentError {
 /// # 示例
 /// 
 /// ```
-/// use rtree::{ConcurrentRTree, Rectangle};
+/// use rtree::ConcurrentRTree;
+/// use geo::{Point, Geometry};
 /// use std::thread;
 /// 
 /// let rtree = ConcurrentRTree::new(4);
@@ -30,8 +31,8 @@ pub enum ConcurrentError {
 /// let handles: Vec<_> = (0..4).map(|i| {
 ///     let rtree_clone = rtree.clone(); // 通过clone共享同一个树
 ///     thread::spawn(move || {
-///         let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-///         rtree_clone.insert(rect, i).unwrap();
+///         let point = Point::new(i as f64 + 0.5, i as f64 + 0.5);
+///         rtree_clone.insert(Geometry::Point(point), i).unwrap();
 ///     })
 /// }).collect();
 /// 
@@ -72,10 +73,12 @@ impl ConcurrentRTree {
     /// 
     /// # 示例
     /// ```
-    /// use rtree::{RTree, ConcurrentRTree, Rectangle};
+    /// use rtree::{RTree, ConcurrentRTree};
+    /// use geo::{Point, Geometry};
     /// 
     /// let mut rtree = RTree::new(4);
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
+    /// let point = Point::new(0.5, 0.5);
+    /// rtree.insert_geometry(1, Geometry::Point(point));
     /// 
     /// let concurrent_rtree = ConcurrentRTree::from(rtree);
     /// assert_eq!(concurrent_rtree.len().unwrap(), 1);
@@ -89,8 +92,8 @@ impl ConcurrentRTree {
     /// 插入新的数据项
     /// 
     /// # 参数
-    /// * `rect` - 数据项的边界矩形
-    /// * `data` - 要存储的数据
+    /// * `geometry` - 几何体数据
+    /// * `data` - 要存储的数据ID
     /// 
     /// # 错误
     /// 如果锁被毒化，返回 `ConcurrentError::LockPoisoned`
@@ -98,42 +101,44 @@ impl ConcurrentRTree {
     /// # 示例
     /// ```
     /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use geo::Geometry;
     /// 
     /// let rtree = ConcurrentRTree::new(4);
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1).unwrap();
+    /// let point = geo::Geometry::Point(geo::Point::new(1.0, 1.0));
+    /// rtree.insert(point, 1).unwrap();
     /// assert_eq!(rtree.len().unwrap(), 1);
     /// ```
-    pub fn insert(&self, rect: Rectangle, data: i32) -> Result<(), ConcurrentError> {
+    pub fn insert(&self, geometry: geo::Geometry, data: i32) -> Result<(), ConcurrentError> {
         let mut tree = self.write_lock()?;
-        tree.insert(rect, data);
+        tree.insert_geometry(data, geometry);
         Ok(())
     }
     
-    /// 删除指定的数据项
+    /// 删除指定的数据条目
     /// 
     /// # 参数
-    /// * `rect` - 要删除的数据项的边界矩形
-    /// * `data` - 要删除的数据
+    /// * `data` - 要删除的数据ID
     /// 
     /// # 返回
-    /// * `Ok(true)` - 成功删除
-    /// * `Ok(false)` - 未找到要删除的项
+    /// * `Ok(true)` - 删除成功或条目不存在（幂等性）
+    /// * `Ok(false)` - 删除失败（例如几何体bbox计算错误）
     /// * `Err(_)` - 锁错误
     /// 
     /// # 示例
     /// ```
-    /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use rtree::ConcurrentRTree;
+    /// use geo::{Point, Geometry};
     /// 
     /// let rtree = ConcurrentRTree::new(4);
-    /// let rect = Rectangle::new(0.0, 0.0, 1.0, 1.0);
+    /// let point = Point::new(0.5, 0.5);
     /// 
-    /// rtree.insert(rect, 1).unwrap();
-    /// assert!(rtree.delete(&rect, 1).unwrap());
-    /// assert!(!rtree.delete(&rect, 1).unwrap()); // 第二次删除返回false
+    /// rtree.insert(Geometry::Point(point), 1).unwrap();
+    /// assert!(rtree.delete(1).unwrap());
+    /// assert!(rtree.delete(1).unwrap()); // 第二次删除返回true（幂等性）
     /// ```
-    pub fn delete(&self, rect: &Rectangle, data: i32) -> Result<bool, ConcurrentError> {
+    pub fn delete(&self, data: i32) -> Result<bool, ConcurrentError> {
         let mut tree = self.write_lock()?;
-        Ok(tree.delete(rect, data))
+        Ok(tree.delete(data))
     }
     
     /// 搜索与指定矩形相交的所有数据项
@@ -150,14 +155,17 @@ impl ConcurrentRTree {
     /// # 示例
     /// ```
     /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use geo::{Point, Geometry};
     /// 
     /// let rtree = ConcurrentRTree::new(4);
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 2.0, 2.0), 1).unwrap();
-    /// rtree.insert(Rectangle::new(3.0, 3.0, 4.0, 4.0), 2).unwrap();
+    /// let point1 = Point::new(1.0, 1.0);
+    /// let point2 = Point::new(3.5, 3.5);
+    /// rtree.insert(Geometry::Point(point1), 1).unwrap();
+    /// rtree.insert(Geometry::Point(point2), 2).unwrap();
     /// 
     /// let search_area = Rectangle::new(1.0, 1.0, 3.5, 3.5);
     /// let results = rtree.search(&search_area).unwrap();
-    /// assert_eq!(results.len(), 2); // 两个矩形都与搜索区域相交
+    /// assert_eq!(results.len(), 2); // 两个点都在搜索区域内
     /// ```
     pub fn search(&self, rect: &Rectangle) -> Result<Vec<i32>, ConcurrentError> {
         let tree = self.read_lock()?;
@@ -171,12 +179,14 @@ impl ConcurrentRTree {
     /// 
     /// # 示例
     /// ```
-    /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use rtree::ConcurrentRTree;
+    /// use geo::{Point, Geometry};
     /// 
     /// let rtree = ConcurrentRTree::new(4);
     /// assert_eq!(rtree.len().unwrap(), 0);
     /// 
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1).unwrap();
+    /// let point = Point::new(0.5, 0.5);
+    /// rtree.insert(Geometry::Point(point), 1).unwrap();
     /// assert_eq!(rtree.len().unwrap(), 1);
     /// ```
     pub fn len(&self) -> Result<usize, ConcurrentError> {
@@ -191,12 +201,14 @@ impl ConcurrentRTree {
     /// 
     /// # 示例
     /// ```
-    /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use rtree::ConcurrentRTree;
+    /// use geo::{Point, Geometry};
     /// 
     /// let rtree = ConcurrentRTree::new(4);
     /// assert!(rtree.is_empty().unwrap());
     /// 
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1).unwrap();
+    /// let point = Point::new(0.5, 0.5);
+    /// rtree.insert(Geometry::Point(point), 1).unwrap();
     /// assert!(!rtree.is_empty().unwrap());
     /// ```
     pub fn is_empty(&self) -> Result<bool, ConcurrentError> {
@@ -211,10 +223,12 @@ impl ConcurrentRTree {
     /// 
     /// # 示例
     /// ```
-    /// use rtree::{ConcurrentRTree, Rectangle};
+    /// use rtree::ConcurrentRTree;
+    /// use geo::{Point, Geometry};
     /// 
     /// let rtree = ConcurrentRTree::new(4);
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1).unwrap();
+    /// let point = Point::new(0.5, 0.5);
+    /// rtree.insert(Geometry::Point(point), 1).unwrap();
     /// assert_eq!(rtree.len().unwrap(), 1);
     /// 
     /// rtree.clear().unwrap();
@@ -273,11 +287,11 @@ mod tests {
         assert_eq!(rtree.len().unwrap(), 0);
         
         // 测试插入
-        let rect1 = Rectangle::new(0.0, 0.0, 1.0, 1.0);
-        let rect2 = Rectangle::new(2.0, 2.0, 3.0, 3.0);
+        let point1 = geo::Geometry::Point(geo::Point::new(0.5, 0.5));
+        let point2 = geo::Geometry::Point(geo::Point::new(2.5, 2.5));
         
-        rtree.insert(rect1, 1).unwrap();
-        rtree.insert(rect2, 2).unwrap();
+        rtree.insert(point1, 1).unwrap();
+        rtree.insert(point2, 2).unwrap();
         
         assert!(!rtree.is_empty().unwrap());
         assert_eq!(rtree.len().unwrap(), 2);
@@ -289,8 +303,8 @@ mod tests {
         assert_eq!(results[0], 1);
         
         // 测试删除
-        assert!(rtree.delete(&rect1, 1).unwrap());
-        assert!(!rtree.delete(&rect1, 1).unwrap()); // 第二次删除应该返回false
+        assert!(rtree.delete(1).unwrap());
+        assert!(rtree.delete(1).unwrap()); // 第二次删除应该返回true（幂等性）
         assert_eq!(rtree.len().unwrap(), 1);
         
         // 测试清空
@@ -304,8 +318,8 @@ mod tests {
         
         // 预填充一些数据
         for i in 0..10 {
-            let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-            rtree.insert(rect, i).unwrap();
+            let point = geo::Geometry::Point(geo::Point::new(i as f64, i as f64));
+            rtree.insert(point, i).unwrap();
         }
         
         // 多个线程并发读取
@@ -340,13 +354,8 @@ mod tests {
             thread::spawn(move || {
                 for i in 0..10 {
                     let data = thread_id * 100 + i;
-                    let rect = Rectangle::new(
-                        data as f64, 
-                        data as f64, 
-                        data as f64 + 1.0, 
-                        data as f64 + 1.0
-                    );
-                    rtree_clone.insert(rect, data).unwrap();
+                    let point = geo::Geometry::Point(geo::Point::new(data as f64, data as f64));
+                    rtree_clone.insert(point, data).unwrap();
                 }
             })
         }).collect();
@@ -366,8 +375,8 @@ mod tests {
         
         // 预填充一些数据
         for i in 0..20 {
-            let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-            rtree.insert(rect, i).unwrap();
+            let point = geo::Geometry::Point(geo::Point::new(i as f64, i as f64));
+            rtree.insert(point, i).unwrap();
         }
         
         // 混合读写操作
@@ -391,8 +400,8 @@ mod tests {
                     2 => {
                         // 写线程 - 插入
                         for i in 100..110 {
-                            let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-                            rtree_clone.insert(rect, i).unwrap();
+                            let point = geo::Geometry::Point(geo::Point::new(i as f64, i as f64));
+                            rtree_clone.insert(point, i).unwrap();
                             thread::sleep(Duration::from_millis(2));
                         }
                     }
@@ -400,8 +409,7 @@ mod tests {
                         // 写线程 - 删除
                         thread::sleep(Duration::from_millis(10)); // 让其他操作先进行
                         for i in 0..5 {
-                            let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-                            rtree_clone.delete(&rect, i).unwrap();
+                            rtree_clone.delete(i).unwrap();
                             thread::sleep(Duration::from_millis(2));
                         }
                     }
@@ -423,12 +431,14 @@ mod tests {
     #[test]
     fn test_clone_sharing() {
         let rtree1 = ConcurrentRTree::new(4);
-        rtree1.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1).unwrap();
+        let point1 = geo::Geometry::Point(geo::Point::new(0.5, 0.5));
+        rtree1.insert(point1, 1).unwrap();
         
         let rtree2 = rtree1.clone();
         
         // 通过rtree2插入数据
-        rtree2.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2).unwrap();
+        let point2 = geo::Geometry::Point(geo::Point::new(2.5, 2.5));
+        rtree2.insert(point2, 2).unwrap();
         
         // rtree1应该能看到这个数据，因为它们共享同一个底层树
         assert_eq!(rtree1.len().unwrap(), 2);

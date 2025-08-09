@@ -893,6 +893,8 @@ version = "0.1.0"
 dependencies = [
  "bincode",
  "criterion",
+ "geo",
+ "geojson",
  "rand",
  "serde",
  "serde_json",

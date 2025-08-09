@@ -1,4 +1,5 @@
 use rtree::{ConcurrentRTree, Rectangle};
+use geo::{Point, Geometry};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -34,8 +35,8 @@ fn basic_concurrent_demo() {
     // 预填充一些数据
     println!("   预填充数据...");
     for i in 0..10 {
-        let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-        rtree.insert(rect, i).unwrap();
+        let point = Geometry::Point(Point::new(i as f64 + 0.5, i as f64 + 0.5));
+        rtree.insert(point, i).unwrap();
     }
     println!("   初始数据量: {}", rtree.len().unwrap());
     
@@ -52,15 +53,14 @@ fn basic_concurrent_demo() {
                 }
                 1 => {
                     // 线程1: 插入操作
-                    let new_rect = Rectangle::new(20.0, 20.0, 21.0, 21.0);
-                    rtree_clone.insert(new_rect, 100).unwrap();
+                    let new_point = Geometry::Point(Point::new(20.5, 20.5));
+                    rtree_clone.insert(new_point, 100).unwrap();
                     println!("   线程{}(插入): 插入成功", thread_id);
                 }
                 2 => {
                     // 线程2: 删除操作
                     thread::sleep(Duration::from_millis(10)); // 稍等一下
-                    let delete_rect = Rectangle::new(0.0, 0.0, 1.0, 1.0);
-                    let deleted = rtree_clone.delete(&delete_rect, 0).unwrap();
+                    let deleted = rtree_clone.delete(0).unwrap();
                     println!("   线程{}(删除): 删除{}", thread_id, if deleted { "成功" } else { "失败" });
                 }
                 _ => unreachable!()
@@ -84,8 +84,8 @@ fn concurrent_read_demo() {
     for i in 0..1000 {
         let x = (i % 100) as f64;
         let y = (i / 100) as f64;
-        let rect = Rectangle::new(x, y, x + 1.0, y + 1.0);
-        rtree.insert(rect, i).unwrap();
+        let point = Geometry::Point(Point::new(x + 0.5, y + 0.5));
+        rtree.insert(point, i).unwrap();
     }
     
     println!("   启动10个并发读取线程...");
@@ -136,8 +136,8 @@ fn concurrent_write_demo() {
                 let data_id = thread_id * 1000 + i;
                 let x = (data_id % 50) as f64;
                 let y = (data_id / 50) as f64;
-                let rect = Rectangle::new(x, y, x + 1.0, y + 1.0);
-                rtree_clone.insert(rect, data_id).unwrap();
+                let point = Geometry::Point(Point::new(x + 0.5, y + 0.5));
+                rtree_clone.insert(point, data_id).unwrap();
                 
                 // 偶尔暂停一下，模拟真实场景
                 if i % 20 == 0 {
@@ -165,8 +165,8 @@ fn mixed_operations_demo() {
     
     // 预填充一些基础数据
     for i in 0..50 {
-        let rect = Rectangle::new(i as f64, i as f64, i as f64 + 1.0, i as f64 + 1.0);
-        rtree.insert(rect, i).unwrap();
+        let point = Geometry::Point(Point::new(i as f64 + 0.5, i as f64 + 0.5));
+        rtree.insert(point, i).unwrap();
     }
     
     println!("   启动混合操作: 3个读线程 + 2个写线程...");
@@ -198,8 +198,8 @@ fn mixed_operations_demo() {
                         let data_id = thread_id * 1000 + i;
                         let x = 100.0 + (data_id % 20) as f64;
                         let y = (data_id / 20) as f64;
-                        let rect = Rectangle::new(x, y, x + 1.0, y + 1.0);
-                        rtree_clone.insert(rect, data_id).unwrap();
+                        let point = Geometry::Point(Point::new(x + 0.5, y + 0.5));
+                        rtree_clone.insert(point, data_id).unwrap();
                         write_count += 1;
                         
                         // 写操作比读操作慢一些
@@ -233,8 +233,8 @@ fn performance_comparison() {
     for i in 0..data_count {
         let x = (i % 100) as f64;
         let y = (i / 100) as f64;
-        let rect = Rectangle::new(x, y, x + 1.0, y + 1.0);
-        single_tree.insert(rect, i).unwrap();
+        let point = Geometry::Point(Point::new(x + 0.5, y + 0.5));
+        single_tree.insert(point, i).unwrap();
     }
     
     let single_elapsed = start.elapsed();
@@ -260,8 +260,8 @@ fn performance_comparison() {
             for i in start_id..end_id {
                 let x = (i % 100) as f64;
                 let y = (i / 100) as f64;
-                let rect = Rectangle::new(x, y, x + 1.0, y + 1.0);
-                rtree_clone.insert(rect, i).unwrap();
+                let point = Geometry::Point(Point::new(x + 0.5, y + 0.5));
+                rtree_clone.insert(point, i).unwrap();
             }
         })
     }).collect();

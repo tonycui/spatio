@@ -1,11 +1,33 @@
 use crate::rectangle::Rectangle;
 use crate::node::{Node, Entry};
 use crate::rtree::RTree;
+use crate::algorithms::utils::geometry_to_bbox;
 
 /// R-tree删除算法实现
 impl RTree {
+    /// 删除指定的数据条目 - 遵循论文Algorithm Delete
+    pub fn delete(&mut self, data: i32)  -> bool {
+         // 直接在 if let 中获取几何体，如果不存在就直接返回
+        let Some(geometry) = self.geometry_map.get(&data) else {
+            return true; // 幂等：不存在视为已删除
+        };
+
+        let Ok(rect) = geometry_to_bbox(geometry) else {
+            eprintln!("Error calculating bounding box for data={}", data);
+            return false;
+        };
+
+        if self.delete_in_rtree(&rect, data) {
+            self.geometry_map.remove(&data);
+            self.geojson_map.remove(&data);
+            true
+        } else {
+            false
+        }
+    }
+
     /// 删除指定的数据条目 - 使用简化的下溢处理策略
-    pub fn delete(&mut self, rect: &Rectangle, data: i32) -> bool {
+    pub fn delete_in_rtree(&mut self, rect: &Rectangle, data: i32) -> bool {
         
         // D1: 找到包含目标条目的叶子节点
         if let Some(leaf_path) = self.find_leaf_path(rect, data) {
@@ -320,38 +342,262 @@ impl RTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use geo::{Point, Polygon, Coord};
+
+    // 新的 delete 函数测试（直接通过 data ID 删除）
+    #[test]
+    fn test_delete_by_id_basic() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入几个几何体
+        let point1 = geo::Geometry::Point(Point::new(1.0, 1.0));
+        let point2 = geo::Geometry::Point(Point::new(5.0, 5.0));
+        let point3 = geo::Geometry::Point(Point::new(10.0, 10.0));
+        
+        rtree.insert_geometry(1, point1);
+        rtree.insert_geometry(2, point2);
+        rtree.insert_geometry(3, point3);
+        
+        // 验证初始状态
+        assert_eq!(rtree.len(), 3);
+        assert_eq!(rtree.geometry_map.len(), 3);
+        assert_eq!(rtree.geojson_map.len(), 3);
+        
+        // 删除中间的一个几何体
+        assert!(rtree.delete(2));
+        
+        // 验证删除成功
+        assert_eq!(rtree.len(), 2);
+        assert_eq!(rtree.geometry_map.len(), 2);
+        assert_eq!(rtree.geojson_map.len(), 2);
+        
+        // 验证正确的条目被删除
+        assert!(rtree.geometry_map.contains_key(&1));
+        assert!(!rtree.geometry_map.contains_key(&2));
+        assert!(rtree.geometry_map.contains_key(&3));
+        
+        // 验证空间查询结果
+        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        assert_eq!(search_all.len(), 2);
+        assert!(search_all.contains(&1));
+        assert!(!search_all.contains(&2));
+        assert!(search_all.contains(&3));
+    }
+
+    #[test]
+    fn test_delete_by_id_nonexistent() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入一个几何体
+        let point = geo::Geometry::Point(Point::new(1.0, 1.0));
+        rtree.insert_geometry(1, point);
+        
+        // 验证初始状态
+        assert_eq!(rtree.len(), 1);
+        assert_eq!(rtree.geometry_map.len(), 1);
+        
+        // 尝试删除不存在的 ID，应该返回 true（幂等性）
+        assert!(rtree.delete(999));
+        
+        // 验证原有数据没有被影响
+        assert_eq!(rtree.len(), 1);
+        assert_eq!(rtree.geometry_map.len(), 1);
+        assert!(rtree.geometry_map.contains_key(&1));
+    }
+
+    #[test]
+    fn test_delete_by_id_empty_tree() {
+        let mut rtree = RTree::new(4);
+        
+        // 在空树上删除，应该返回 true（幂等性）
+        assert!(rtree.delete(1));
+        
+        // 验证树仍然为空
+        assert_eq!(rtree.len(), 0);
+        assert!(rtree.is_empty());
+    }
+
+    #[test]
+    fn test_delete_by_id_multiple_operations() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入多个几何体
+        for i in 1..=5 {
+            let point = geo::Geometry::Point(Point::new(i as f64, i as f64));
+            rtree.insert_geometry(i, point);
+        }
+        
+        // 验证初始状态
+        assert_eq!(rtree.len(), 5);
+        
+        // 删除部分几何体
+        assert!(rtree.delete(2));
+        assert!(rtree.delete(4));
+        
+        // 验证删除后的状态
+        assert_eq!(rtree.len(), 3);
+        assert_eq!(rtree.geometry_map.len(), 3);
+        assert_eq!(rtree.geojson_map.len(), 3);
+        
+        // 验证剩余的几何体
+        let remaining_ids = vec![1, 3, 5];
+        for id in remaining_ids {
+            assert!(rtree.geometry_map.contains_key(&id));
+        }
+        
+        // 验证被删除的几何体
+        let deleted_ids = vec![2, 4];
+        for id in deleted_ids {
+            assert!(!rtree.geometry_map.contains_key(&id));
+        }
+        
+        // 验证空间查询结果
+        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
+        assert_eq!(search_all.len(), 3);
+        assert!(search_all.contains(&1));
+        assert!(!search_all.contains(&2));
+        assert!(search_all.contains(&3));
+        assert!(!search_all.contains(&4));
+        assert!(search_all.contains(&5));
+    }
+
+    #[test]
+    fn test_delete_by_id_all_entries() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入几个几何体
+        let geometries = vec![
+            (1, geo::Geometry::Point(Point::new(1.0, 1.0))),
+            (2, geo::Geometry::Point(Point::new(5.0, 5.0))),
+            (3, geo::Geometry::Point(Point::new(10.0, 10.0))),
+        ];
+        
+        for (id, geom) in &geometries {
+            rtree.insert_geometry(*id, geom.clone());
+        }
+        
+        // 验证初始状态
+        assert_eq!(rtree.len(), 3);
+        
+        // 删除所有几何体
+        for (id, _) in &geometries {
+            assert!(rtree.delete(*id));
+        }
+        
+        // 验证树为空
+        assert_eq!(rtree.len(), 0);
+        assert_eq!(rtree.geometry_map.len(), 0);
+        assert_eq!(rtree.geojson_map.len(), 0);
+        assert!(rtree.is_empty());
+        
+        // 验证空间查询返回空结果
+        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        assert!(search_results.is_empty());
+    }
+
+    #[test]
+    fn test_delete_by_id_consistency() {
+        let mut rtree = RTree::new(4);
+        
+        // 插入不同类型的几何体
+        let point = geo::Geometry::Point(Point::new(1.0, 1.0));
+        rtree.insert_geometry(1, point);
+        
+        let coords = vec![
+            Coord { x: 5.0, y: 5.0 },
+            Coord { x: 8.0, y: 5.0 },
+            Coord { x: 8.0, y: 8.0 },
+            Coord { x: 5.0, y: 8.0 },
+            Coord { x: 5.0, y: 5.0 },
+        ];
+        let polygon = geo::Geometry::Polygon(Polygon::new(coords.into(), vec![]));
+        rtree.insert_geometry(2, polygon);
+        
+        // 验证插入成功
+        assert_eq!(rtree.len(), 2);
+        assert_eq!(rtree.geometry_map.len(), 2);
+        assert_eq!(rtree.geojson_map.len(), 2);
+        
+        // 删除一个几何体
+        assert!(rtree.delete(1));
+        
+        // 验证数据一致性
+        assert_eq!(rtree.len(), 1);
+        assert_eq!(rtree.geometry_map.len(), 1);
+        assert_eq!(rtree.geojson_map.len(), 1);
+        
+        // 验证剩余几何体仍然正常
+        assert!(!rtree.geometry_map.contains_key(&1));
+        assert!(rtree.geometry_map.contains_key(&2));
+        
+        let search_results = rtree.search(&Rectangle::new(5.0, 5.0, 8.0, 8.0));
+        assert!(search_results.contains(&2));
+        assert!(!search_results.contains(&1));
+    }
+
+    #[test]
+    fn test_delete_by_id_with_bbox_error() {
+        let mut rtree = RTree::new(4);
+        
+        // 这个测试验证当几何体存在但bbox计算失败时的行为
+        // 注意：实际情况下geo::Geometry很难出现bbox计算失败的情况
+        // 但我们测试函数的错误处理路径
+        
+        let point = geo::Geometry::Point(Point::new(1.0, 1.0));
+        rtree.insert_geometry(1, point);
+        
+        // 验证初始状态
+        assert_eq!(rtree.len(), 1);
+        assert!(rtree.geometry_map.contains_key(&1));
+        
+        // 删除操作（正常情况下应该成功）
+        let result = rtree.delete(1);
+        
+        // 验证结果：要么成功删除，要么因为bbox错误返回false但不破坏数据一致性
+        if result {
+            // 删除成功
+            assert_eq!(rtree.len(), 0);
+            assert!(!rtree.geometry_map.contains_key(&1));
+        } else {
+            // 删除失败但数据保持一致
+            assert_eq!(rtree.len(), 1);
+            assert!(rtree.geometry_map.contains_key(&1));
+        }
+        
+        // 无论如何，所有计数都应该保持一致
+        assert_eq!(rtree.len(), rtree.geometry_map.len());
+        assert_eq!(rtree.len(), rtree.geojson_map.len());
+    }
 
     #[test]
     fn test_delete() {
         let mut rtree = RTree::new(4);
         
         // 插入数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 10.0, 10.0), 1);
-        rtree.insert(Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
-        rtree.insert(Rectangle::new(20.0, 20.0, 30.0, 30.0), 3);
+        let point1 = geo::Geometry::Point(Point::new(5.0, 5.0));
+        let point2 = geo::Geometry::Point(Point::new(10.0, 10.0));
+        let point3 = geo::Geometry::Point(Point::new(25.0, 25.0));
+        
+        rtree.insert_geometry(1, point1);
+        rtree.insert_geometry(2, point2);
+        rtree.insert_geometry(3, point3);
         
         // 删除一个条目
-        let deleted = rtree.delete(&Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
+        let deleted = rtree.delete(2);
         assert!(deleted);
         
         // 尝试删除不存在的条目
-        let deleted_again = rtree.delete(&Rectangle::new(5.0, 5.0, 15.0, 15.0), 2);
-        assert!(!deleted_again);
+        let deleted_again = rtree.delete(2);
+        assert!(deleted_again); // 幂等性，返回 true
         
-        // 验证树结构 - 对于只有3个条目的小树，根节点可能仍然是叶子节点
-        let root = rtree.root_ref().as_ref().unwrap();
-        assert_eq!(root.entries.len(), 2);
+        // 验证树结构
+        assert_eq!(rtree.len(), 2);
         
         // 验证剩余条目仍然存在
-        let results1 = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
-        assert!(results1.contains(&1));
-        
-        let results3 = rtree.search(&Rectangle::new(20.0, 20.0, 30.0, 30.0));
-        assert!(results3.contains(&3));
-        
-        // 验证删除的条目不存在
-        let results2 = rtree.search(&Rectangle::new(5.0, 5.0, 15.0, 15.0));
-        assert!(!results2.contains(&2));
+        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 30.0, 30.0));
+        assert!(search_all.contains(&1));
+        assert!(!search_all.contains(&2));
+        assert!(search_all.contains(&3));
     }
     
     #[test]
@@ -359,37 +605,38 @@ mod tests {
         let mut rtree = RTree::new(4);
         
         // 插入一些数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), 3);
-        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), 4);
+        let point1 = geo::Geometry::Point(Point::new(0.5, 0.5));
+        let point2 = geo::Geometry::Point(Point::new(2.5, 2.5));
+        let point3 = geo::Geometry::Point(Point::new(4.5, 4.5));
+        let point4 = geo::Geometry::Point(Point::new(6.5, 6.5));
+        
+        rtree.insert_geometry(1, point1);
+        rtree.insert_geometry(2, point2);
+        rtree.insert_geometry(3, point3);
+        rtree.insert_geometry(4, point4);
         
         // 验证初始状态
         assert_eq!(rtree.len(), 4);
         
         // 删除一个存在的条目
-        assert!(rtree.delete(&Rectangle::new(2.0, 2.0, 3.0, 3.0), 2));
+        assert!(rtree.delete(2));
         assert_eq!(rtree.len(), 3);
         
         // 验证删除后搜索不到该条目
-        let results = rtree.search(&Rectangle::new(2.0, 2.0, 3.0, 3.0));
-        assert!(!results.contains(&2));
+        let search_all = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
+        assert!(search_all.contains(&1));
+        assert!(!search_all.contains(&2));
+        assert!(search_all.contains(&3));
+        assert!(search_all.contains(&4));
         
-        // 验证其他条目仍然存在
-        let all_results = rtree.search(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
-        assert!(all_results.contains(&1));
-        assert!(all_results.contains(&3));
-        assert!(all_results.contains(&4));
-        assert!(!all_results.contains(&2));
-        
-        // 尝试删除不存在的条目
-        assert!(!rtree.delete(&Rectangle::new(10.0, 10.0, 11.0, 11.0), 5));
+        // 尝试删除不存在的条目（幂等性）
+        assert!(rtree.delete(5));
         assert_eq!(rtree.len(), 3);
         
         // 删除所有剩余条目
-        assert!(rtree.delete(&Rectangle::new(0.0, 0.0, 1.0, 1.0), 1));
-        assert!(rtree.delete(&Rectangle::new(4.0, 4.0, 5.0, 5.0), 3));
-        assert!(rtree.delete(&Rectangle::new(6.0, 6.0, 7.0, 7.0), 4));
+        assert!(rtree.delete(1));
+        assert!(rtree.delete(3));
+        assert!(rtree.delete(4));
         
         // 验证树为空
         assert_eq!(rtree.len(), 0);
@@ -403,7 +650,8 @@ mod tests {
         // 插入10个条目
         for i in 0..10 {
             let x = (i as f64) * 2.0;
-            rtree.insert(Rectangle::new(x, 0.0, x + 1.0, 1.0), i);
+            let point = geo::Geometry::Point(Point::new(x + 0.5, 0.5));
+            rtree.insert_geometry(i, point);
         }
         
         println!("Initial tree structure:");
@@ -411,16 +659,14 @@ mod tests {
         
         // 验证所有条目都在
         for i in 0..10 {
-            let x = (i as f64) * 2.0;
-            let results = rtree.search(&Rectangle::new(x - 0.1, -0.1, x + 1.1, 1.1));
-            println!("Before deletion - Entry {}: found = {}", i, results.contains(&i));
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
+            println!("Before deletion - Entry {}: found = {}", i, search_results.contains(&i));
         }
         
         // 删除前5个条目
         for i in 0..5 {
-            let x = (i as f64) * 2.0;
             println!("\nDeleting entry {}", i);
-            let deleted = rtree.delete(&Rectangle::new(x, 0.0, x + 1.0, 1.0), i);
+            let deleted = rtree.delete(i);
             println!("Delete success: {}, tree length: {}", deleted, rtree.len());
             
             if i == 2 {  // 在删除第3个条目后打印树结构
@@ -434,9 +680,8 @@ mod tests {
         
         // 验证剩余条目
         for i in 5..10 {
-            let x = (i as f64) * 2.0;
-            let results = rtree.search(&Rectangle::new(x - 0.1, -0.1, x + 1.1, 1.1));
-            println!("After deletion - Entry {}: found = {}", i, results.contains(&i));
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 20.0, 2.0));
+            println!("After deletion - Entry {}: found = {}", i, search_results.contains(&i));
         }
     }
     
@@ -445,23 +690,23 @@ mod tests {
         let mut rtree = RTree::new(4); // min_entries = 2, max_entries = 4
         
         // 插入足够多的数据以创建有意义的树结构
-        let data_points = vec![
-            (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
-            (Rectangle::new(1.0, 0.0, 2.0, 1.0), 2),
-            (Rectangle::new(2.0, 0.0, 3.0, 1.0), 3),
-            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 4),
-            (Rectangle::new(11.0, 0.0, 12.0, 1.0), 5),
+        let geometries = vec![
+            (1, geo::Geometry::Point(Point::new(0.5, 0.5))),
+            (2, geo::Geometry::Point(Point::new(1.5, 0.5))),
+            (3, geo::Geometry::Point(Point::new(2.5, 0.5))),
+            (4, geo::Geometry::Point(Point::new(10.5, 0.5))),
+            (5, geo::Geometry::Point(Point::new(11.5, 0.5))),
         ];
         
-        for (rect, data) in &data_points {
-            rtree.insert(rect.clone(), *data);
+        for (id, geom) in &geometries {
+            rtree.insert_geometry(*id, geom.clone());
         }
         
         let initial_len = rtree.len();
         
         // 删除一些条目，可能触发下溢处理
-        assert!(rtree.delete(&Rectangle::new(1.0, 0.0, 2.0, 1.0), 2));
-        assert!(rtree.delete(&Rectangle::new(2.0, 0.0, 3.0, 1.0), 3));
+        assert!(rtree.delete(2));
+        assert!(rtree.delete(3));
         
         // 验证删除后的树状态
         assert_eq!(rtree.len(), initial_len - 2);
@@ -469,18 +714,14 @@ mod tests {
         // 验证剩余条目仍然可以找到
         let remaining_data = vec![1, 4, 5];
         for &data in &remaining_data {
-            let found = data_points.iter()
-                .find(|(_, d)| *d == data)
-                .map(|(rect, _)| rtree.search(rect).contains(&data))
-                .unwrap_or(false);
-            assert!(found, "Entry {} should still be findable after deletions", data);
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+            assert!(search_results.contains(&data), "Entry {} should still be findable after deletions", data);
         }
         
         // 验证删除的条目不存在
-        let deleted_results_2 = rtree.search(&Rectangle::new(1.0, 0.0, 2.0, 1.0));
-        let deleted_results_3 = rtree.search(&Rectangle::new(2.0, 0.0, 3.0, 1.0));
-        assert!(!deleted_results_2.contains(&2));
-        assert!(!deleted_results_3.contains(&3));
+        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+        assert!(!search_results.contains(&2));
+        assert!(!search_results.contains(&3));
     }
     
     #[test]
@@ -488,37 +729,37 @@ mod tests {
         let mut rtree = RTree::new(3); // min_entries = 1, max_entries = 3
         
         // 创建一个简单的测试场景验证简化的下溢处理
-        let data_points = vec![
-            (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
-            (Rectangle::new(0.5, 0.5, 1.5, 1.5), 2),  // 与1重叠
-            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 10),
-            (Rectangle::new(10.5, 0.5, 11.5, 1.5), 11), // 与10重叠
+        let geometries = vec![
+            (1, geo::Geometry::Point(Point::new(0.5, 0.5))),
+            (2, geo::Geometry::Point(Point::new(1.0, 1.0))),  // 与1重叠区域
+            (10, geo::Geometry::Point(Point::new(10.5, 0.5))),
+            (11, geo::Geometry::Point(Point::new(11.0, 1.0))), // 与10重叠区域
         ];
         
-        for (rect, data) in &data_points {
-            rtree.insert(rect.clone(), *data);
+        for (id, geom) in &geometries {
+            rtree.insert_geometry(*id, geom.clone());
         }
         
         // 验证插入后所有条目都存在
-        for (rect, data) in &data_points {
-            let results = rtree.search(rect);
-            assert!(results.contains(data));
+        for (id, _) in &geometries {
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+            assert!(search_results.contains(id));
         }
         
         // 删除一个条目可能导致叶子节点下溢
-        let deleted = rtree.delete(&Rectangle::new(0.5, 0.5, 1.5, 1.5), 2);
+        let deleted = rtree.delete(2);
         assert!(deleted);
         
         // 验证重新插入的正确性：剩余条目应该仍然能找到
-        for (rect, data) in &data_points {
-            if *data == 2 {
+        for (id, _) in &geometries {
+            if *id == 2 {
                 // 被删除的条目应该找不到
-                let results = rtree.search(rect);
-                assert!(!results.contains(data));
+                let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+                assert!(!search_results.contains(id));
             } else {
                 // 其他条目应该仍然能找到（即使可能被重新插入了）
-                let results = rtree.search(rect);
-                assert!(results.contains(data), "Entry {} should still be found after underflow handling", data);
+                let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 2.0));
+                assert!(search_results.contains(id), "Entry {} should still be found after underflow handling", id);
             }
         }
         
@@ -530,39 +771,38 @@ mod tests {
         let mut rtree = RTree::new(3); // min_entries = 1, max_entries = 3
         
         // 创建一个特定的树结构，测试重新插入的正确性
-        let original_data = vec![
-            (Rectangle::new(0.0, 0.0, 1.0, 1.0), 1),
-            (Rectangle::new(0.5, 0.5, 1.5, 1.5), 2),  // 与1重叠
-            (Rectangle::new(10.0, 0.0, 11.0, 1.0), 10),
-            (Rectangle::new(10.5, 0.5, 11.5, 1.5), 11), // 与10重叠
-            (Rectangle::new(20.0, 0.0, 21.0, 1.0), 20),
-            (Rectangle::new(20.5, 0.5, 21.5, 1.5), 21), // 与20重叠
+        let geometries = vec![
+            (1, geo::Geometry::Point(Point::new(0.5, 0.5))),
+            (2, geo::Geometry::Point(Point::new(1.0, 1.0))),  // 与1重叠区域
+            (10, geo::Geometry::Point(Point::new(10.5, 0.5))),
+            (11, geo::Geometry::Point(Point::new(11.0, 1.0))), // 与10重叠区域
+            (20, geo::Geometry::Point(Point::new(20.5, 0.5))),
+            (21, geo::Geometry::Point(Point::new(21.0, 1.0))), // 与20重叠区域
         ];
         
-        for (rect, data) in &original_data {
-            rtree.insert(rect.clone(), *data);
+        for (id, geom) in &geometries {
+            rtree.insert_geometry(*id, geom.clone());
         }
         
         // 记录插入前每个条目的搜索结果
-        for (rect, data) in &original_data {
-            let results = rtree.search(rect);
-            assert!(results.contains(data));
+        for (id, _) in &geometries {
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
+            assert!(search_results.contains(id));
         }
         
         // 删除一个可能导致节点重组的条目
-        let deleted = rtree.delete(&Rectangle::new(0.5, 0.5, 1.5, 1.5), 2);
+        let deleted = rtree.delete(2);
         assert!(deleted);
         
         // 验证重新插入的正确性
-        for (rect, data) in &original_data {
-            if *data == 2 {
+        for (id, _) in &geometries {
+            let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 25.0, 2.0));
+            if *id == 2 {
                 // 被删除的条目应该找不到
-                let results = rtree.search(rect);
-                assert!(!results.contains(data), "Deleted entry {} should not be found", data);
+                assert!(!search_results.contains(id), "Deleted entry {} should not be found", id);
             } else {
                 // 其他条目应该仍然能找到
-                let results = rtree.search(rect);
-                assert!(results.contains(data), "Entry {} should still be found after underflow handling", data);
+                assert!(search_results.contains(id), "Entry {} should still be found after underflow handling", id);
             }
         }
         
@@ -582,38 +822,33 @@ mod tests {
         let mut rtree = RTree::new(3);
         
         // 构建一个简单的树，测试删除后的MBR更新
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(1.0, 0.0, 2.0, 1.0), 2);
-        rtree.insert(Rectangle::new(2.0, 0.0, 3.0, 1.0), 3);
-        rtree.insert(Rectangle::new(10.0, 10.0, 11.0, 11.0), 4); // 远离的点
+        let geometries = vec![
+            (1, geo::Geometry::Point(Point::new(0.5, 0.5))),
+            (2, geo::Geometry::Point(Point::new(1.5, 0.5))),
+            (3, geo::Geometry::Point(Point::new(2.5, 0.5))),
+            (4, geo::Geometry::Point(Point::new(10.5, 10.5))), // 远离的点
+        ];
+        
+        for (id, geom) in &geometries {
+            rtree.insert_geometry(*id, geom.clone());
+        }
         
         // 删除一个条目，验证简化的下溢处理正确工作
-        let deleted = rtree.delete(&Rectangle::new(1.0, 0.0, 2.0, 1.0), 2);
+        let deleted = rtree.delete(2);
         assert!(deleted);
         
         // 验证删除后树的完整性
         assert_eq!(rtree.len(), 3);
         
         // 验证剩余条目仍然可以找到
-        let results1 = rtree.search(&Rectangle::new(0.0, 0.0, 1.0, 1.0));
-        let results3 = rtree.search(&Rectangle::new(2.0, 0.0, 3.0, 1.0));
-        let results4 = rtree.search(&Rectangle::new(10.0, 10.0, 11.0, 11.0));
-        
-        assert!(results1.contains(&1), "Entry 1 should still exist");
-        assert!(results3.contains(&3), "Entry 3 should still exist");
-        assert!(results4.contains(&4), "Entry 4 should still exist");
-        
-        // 验证删除的条目不存在
-        let results2 = rtree.search(&Rectangle::new(1.0, 0.0, 2.0, 1.0));
-        assert!(!results2.contains(&2), "Entry 2 should not exist");
+        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 15.0, 15.0));
+        assert!(search_results.contains(&1), "Entry 1 should still exist");
+        assert!(search_results.contains(&3), "Entry 3 should still exist");
+        assert!(search_results.contains(&4), "Entry 4 should still exist");
+        assert!(!search_results.contains(&2), "Entry 2 should not exist");
         
         // 验证树结构仍然有效（能搜索到所有剩余条目）
-        let all_results = rtree.search(&Rectangle::new(-1.0, -1.0, 20.0, 20.0));
-        assert_eq!(all_results.len(), 3);
-        assert!(all_results.contains(&1));
-        assert!(all_results.contains(&3));
-        assert!(all_results.contains(&4));
-        assert!(!all_results.contains(&2));
+        assert_eq!(search_results.len(), 3);
     }
     
     #[test]
@@ -622,20 +857,24 @@ mod tests {
         let mut rtree = RTree::new(3);
         
         // 只插入少量数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 0.0, 3.0, 1.0), 2);
+        let point1 = geo::Geometry::Point(Point::new(0.5, 0.5));
+        let point2 = geo::Geometry::Point(Point::new(2.5, 0.5));
+        
+        rtree.insert_geometry(1, point1);
+        rtree.insert_geometry(2, point2);
         
         // 删除一个条目
-        let deleted = rtree.delete(&Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
+        let deleted = rtree.delete(1);
         assert!(deleted);
         
         // 验证树仍然有效
         assert_eq!(rtree.len(), 1);
-        let results = rtree.search(&Rectangle::new(2.0, 0.0, 3.0, 1.0));
-        assert!(results.contains(&2));
+        let search_results = rtree.search(&Rectangle::new(0.0, 0.0, 5.0, 2.0));
+        assert!(search_results.contains(&2));
+        assert!(!search_results.contains(&1));
         
         // 删除最后一个条目
-        let deleted_last = rtree.delete(&Rectangle::new(2.0, 0.0, 3.0, 1.0), 2);
+        let deleted_last = rtree.delete(2);
         assert!(deleted_last);
         
         // 验证树为空

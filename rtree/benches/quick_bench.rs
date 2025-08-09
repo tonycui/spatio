@@ -126,7 +126,7 @@ fn benchmark_remove_half(test_data: &[(Rectangle, i32)], config: &BenchConfig) -
     let start = Instant::now();
     for i in 0..half_size {
         let (rect, data) = &test_data[i];
-        rtree.delete(rect, *data);
+        rtree.delete(*data);
     }
     start.elapsed()
 }
@@ -158,7 +158,7 @@ fn benchmark_remove_all(test_data: &[(Rectangle, i32)], config: &BenchConfig) ->
     
     let start = Instant::now();
     for (rect, data) in test_data {
-        rtree.delete(rect, *data);
+        rtree.delete(*data);
     }
     start.elapsed()
 }

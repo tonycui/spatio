@@ -1,0 +1,14 @@
+[build]
+rustflags = [
+    "-C", "debuginfo=2",           # 强制生成完整调试信息
+    "-C", "force-frame-pointers=yes", # 强制保留帧指针
+    "-C", "split-debuginfo=packed",   # 将调试信息打包到二进制文件中
+    "-C", "symbol-mangling-version=v0" # 使用更好的符号命名
+]
+
+[target.x86_64-apple-darwin]
+rustflags = [
+    "-C", "debuginfo=2",
+    "-C", "force-frame-pointers=yes",
+    "-C", "split-debuginfo=packed"
+]

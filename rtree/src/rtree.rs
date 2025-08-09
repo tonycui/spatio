@@ -1,6 +1,8 @@
 use crate::rectangle::Rectangle;
 use crate::node::{Node, Entry, NodeType};
 use serde::{Deserialize, Serialize};
+use geo::Geometry;
+use std::collections::HashMap;
 
 /// 用于JSON序列化的简化树结构
 #[derive(Debug, Serialize, Deserialize)]
@@ -49,6 +51,8 @@ pub struct RTree {
     max_entries: usize,
     /// 最小条目数m（通常为M/2）
     min_entries: usize,
+    pub(crate) geometry_map: HashMap<i32, Geometry>,
+    pub(crate) geojson_map: HashMap<i32, String>,
 }
 
 impl RTree {
@@ -61,6 +65,8 @@ impl RTree {
             root: None,
             max_entries,
             min_entries,
+            geometry_map: HashMap::new(),
+            geojson_map: HashMap::new(),
         }
     }
 

@@ -1,6 +1,34 @@
 use crate::rectangle::Rectangle;
 use crate::node::{Node, Entry};
 use crate::rtree::RTree;
+// use std::result::Result;
+use std::error::Error;
+
+
+pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
+
+/// 从 geo::Geometry 计算边界框
+pub fn geometry_to_bbox(geometry: &geo::Geometry) -> Result<Rectangle> {
+    use geo::algorithm::bounding_rect::BoundingRect;
+    
+    match geometry.bounding_rect() {
+        Some(rect) => {
+            let min_x = rect.min().x;
+            let min_y = rect.min().y;
+            let max_x = rect.max().x;
+            let max_y = rect.max().y;
+            
+            Ok(Rectangle {
+                min: [min_x, min_y],
+                max: [max_x, max_y],
+            })
+        }
+        None => Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "Cannot calculate bounding box for empty geometry"
+        )) as Box<dyn std::error::Error + Send + Sync>)
+    }
+}
 
 /// R-tree工具函数实现
 impl RTree {

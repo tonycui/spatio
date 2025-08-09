@@ -220,7 +220,7 @@ impl GeoDatabase {
                 // 直接从几何体计算边界框
                 if let Ok(bbox) = geometry_to_bbox(&removed_item.geometry) {
                     let data_id = string_to_data_id(item_id);
-                    rtree.delete(&bbox, data_id);
+                    rtree.delete(data_id);
                 }
             }
             

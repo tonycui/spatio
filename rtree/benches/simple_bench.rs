@@ -126,7 +126,7 @@ fn benchmark_simple_delete(test_data: &[(Rectangle, i32)], delete_count: usize) 
     
     for i in 0..delete_count.min(test_data.len()) {
         let (rect, data) = &test_data[i];
-        if rtree.delete(rect, *data) {
+        if rtree.delete(*data) {
             successful_deletes += 1;
         }
     }

@@ -288,7 +288,6 @@ mod tests {
         rtree.insert_geometry("3".to_string(), rect3);
 
         // 搜索相交的矩形
-        let query = Rectangle::new(8.0, 8.0, 12.0, 12.0);
         let query_geom = Geometry::Polygon(Polygon::new(
             vec![
                 Coord { x: 8.0, y: 8.0 },
@@ -308,7 +307,6 @@ mod tests {
         assert!(!results.iter().any(|item| item.id == "3"));
 
         // 搜索不相交的区域
-        let query2 = Rectangle::new(50.0, 50.0, 60.0, 60.0);
         let query_geom2 = Geometry::Polygon(Polygon::new(
             vec![
                 Coord { x: 50.0, y: 50.0 },
@@ -343,7 +341,6 @@ mod tests {
         assert!(!rtree.is_empty());
         
         // 搜索所有数据
-        let query = Rectangle::new(-1.0, -1.0, 100.0, 100.0);
         let query_geom = Geometry::Polygon(Polygon::new(
             vec![
                 Coord { x: -1.0, y: -1.0 },

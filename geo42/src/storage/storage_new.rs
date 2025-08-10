@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use std::sync::Arc;
 use crate::Result;
@@ -8,30 +7,6 @@ use geo::Geometry;
 // 导入 rtree 相关类型
 use rtree::RTree;
 use rtree::GeoItem;
-
-// 导入 geo_utils 模块的函数
-use super::geo_utils::{string_to_data_id, geometry_to_bbox};
-use super::geometry_utils::{geometries_intersect};
-
-/// 优化的 GeoJSON 对象表示 - 存储解析后的几何体和缓存的序列化字符串
-// #[derive(Debug, Clone, Serialize, Deserialize)]
-// pub struct GeoItem2 {
-//     pub id: String,
-//     pub geometry: Geometry,  // 直接存储 geo::Geometry，避免查询时重复转换
-//     // 预计算的 GeoJSON 字符串，避免重复序列化
-//     pub geojson: String,
-// }
-
-// impl GeoItem2 {
-//     pub fn new(id: String, geometry: Geometry, geojson: String) -> Result<Self> {
-//         Ok(Self {
-//             id,
-//             geometry,
-//             geojson,
-//         })
-//     }
-// }
-
 
 /// 异步地理数据库，管理多个 Collection (SharedMap架构)
 pub struct GeoDatabase {

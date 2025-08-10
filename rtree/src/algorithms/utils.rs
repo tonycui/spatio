@@ -126,12 +126,12 @@ mod tests {
         let mut rtree = RTree::new(4);
         
         // 插入一些数据以创建多层结构
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), 3);
-        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), 4);
-        rtree.insert(Rectangle::new(8.0, 8.0, 9.0, 9.0), 5);
-        
+        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), "3".to_string());
+        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), "4".to_string());
+        rtree.insert(Rectangle::new(8.0, 8.0, 9.0, 9.0), "5".to_string());
+
         // 测试空路径 - 应该返回根节点
         assert!(rtree.get_last_node_mut(&[]).is_some());
         
@@ -150,11 +150,11 @@ mod tests {
         let mut rtree = RTree::new(3);
         
         // 插入数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), 3);
-        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), 4);
-        
+        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), "3".to_string());
+        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), "4".to_string());
+
         // 获取根节点的MBR作为参考
         let _original_mbr = if let Some(root) = rtree.root_ref() {
             root.mbr.clone()

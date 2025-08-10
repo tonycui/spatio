@@ -98,9 +98,9 @@ mod tests {
         print_tree_structure(&rtree, 3);
         
         // 插入一些数据
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        
+        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+
         // 测试有数据的树的调试输出
         rtree.print_tree_structure_debug();
         print_tree_structure(&rtree, 3);

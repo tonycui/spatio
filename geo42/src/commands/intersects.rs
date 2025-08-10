@@ -47,7 +47,7 @@ impl Command for IntersectsCommand {
                         
                         for item in results {
                             // 优化：直接使用缓存的 GeoJSON 字符串，零序列化开销
-                            resp_values.push(RespValue::BulkString(Some(item.get_geojson_string().to_string())));
+                            resp_values.push(RespValue::BulkString(Some(item.geojson)));
                         }
                         
                         Ok(RespResponse::array(Some(&resp_values)))

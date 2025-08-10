@@ -12,6 +12,7 @@ rand = "0.8"
 tokio = { version = "1.0", features = ["sync", "time"] }
 geo = "0.28"
 geojson = "0.24"
+derive_more = "0.99"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

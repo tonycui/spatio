@@ -28,7 +28,7 @@ pub enum Entry {
     /// - data: 用户数据的ID或值
     /// 
     /// 只会出现在NodeType::Leaf类型的节点中
-    Data { mbr: Rectangle, data: i32 },
+    Data { mbr: Rectangle, data: String },
     
     /// 节点条目：存储指向子节点的引用
     /// 
@@ -72,9 +72,9 @@ impl Entry {
     /// 
     /// 只有Entry::Data类型的条目才会返回Some(data)
     /// Entry::Node类型的条目返回None
-    pub fn data(&self) -> Option<i32> {
+    pub fn data(&self) -> Option<String> {
         match self {
-            Entry::Data { data, .. } => Some(*data),
+            Entry::Data { data, .. } => Some(data.clone()),
             Entry::Node { .. } => None,
         }
     }
@@ -317,11 +317,11 @@ mod tests {
         
         let entry1 = Entry::Data { 
             mbr: Rectangle::new(0.0, 0.0, 5.0, 5.0), 
-            data: 1 
+            data: "1".to_string() 
         };
         let entry2 = Entry::Data { 
             mbr: Rectangle::new(3.0, 3.0, 8.0, 8.0), 
-            data: 2 
+            data: "2".to_string() 
         };
         
         node.add_entry(entry1);
@@ -335,11 +335,11 @@ mod tests {
         // 测试数据条目
         let data_entry = Entry::Data { 
             mbr: Rectangle::new(0.0, 0.0, 5.0, 5.0), 
-            data: 42 
+            data: "42".to_string() 
         };
         
         assert!(data_entry.is_data());
-        assert_eq!(data_entry.data(), Some(42));
+        assert_eq!(data_entry.data(), Some("42".to_string()));
         assert_eq!(data_entry.mbr(), &Rectangle::new(0.0, 0.0, 5.0, 5.0));
         assert!(data_entry.child().is_none());
 

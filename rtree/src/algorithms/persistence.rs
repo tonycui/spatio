@@ -99,28 +99,21 @@ impl RTree {
         Ok(())
     }
     
-    /// 从文件加载R-tree
-    /// 
-    /// 根据文件扩展名自动判断序列化格式
-    /// 
-    /// # 参数
-    /// * `path` - 源文件路径
-    /// 
     /// # 示例
     /// ```
     /// use rtree::RTree;
-    /// use rtree::Rectangle;
+    /// use geo::{Point, Geometry};
     /// use tempfile::NamedTempFile;
-    /// 
+    ///
     /// // 创建临时文件
     /// let temp_file = NamedTempFile::new().unwrap();
     /// let temp_path = temp_file.path();
-    /// 
+    ///
     /// // 创建并保存R-tree
     /// let mut rtree = RTree::new(4);
-    /// rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
+    /// rtree.insert_geometry("1".to_string(), Geometry::Point(Point::new(0.5, 0.5)));
     /// rtree.dump_to_file(&temp_path).unwrap();
-    /// 
+    ///
     /// // 从文件加载
     /// let loaded_rtree = RTree::load_from_file(&temp_path).unwrap();
     /// assert_eq!(rtree.len(), loaded_rtree.len());
@@ -168,10 +161,10 @@ mod tests {
         
         // 创建并填充R-tree
         let mut original_rtree = RTree::new(4);
-        original_rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        original_rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        original_rtree.insert(Rectangle::new(5.0, 5.0, 6.0, 6.0), 3);
-        
+        original_rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        original_rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+        original_rtree.insert(Rectangle::new(5.0, 5.0, 6.0, 6.0), "3".to_string());
+
         // 导出到JSON文件
         original_rtree.dump_to_file(&json_path).unwrap();
         
@@ -202,10 +195,10 @@ mod tests {
         
         // 创建并填充R-tree
         let mut original_rtree = RTree::new(4);
-        original_rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        original_rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        original_rtree.insert(Rectangle::new(5.0, 5.0, 6.0, 6.0), 3);
-        
+        original_rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        original_rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+        original_rtree.insert(Rectangle::new(5.0, 5.0, 6.0, 6.0), "3".to_string());
+
         // 导出到二进制文件
         original_rtree.dump_to_file(&bin_path).unwrap();
         
@@ -277,7 +270,7 @@ mod tests {
         for i in 0..100 {
             let x = (i % 10) as f64;
             let y = (i / 10) as f64;
-            rtree.insert(Rectangle::new(x, y, x + 1.0, y + 1.0), i);
+            rtree.insert(Rectangle::new(x, y, x + 1.0, y + 1.0), i.to_string());
         }
         
         // 导出两种格式

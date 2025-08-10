@@ -290,10 +290,10 @@ mod tests {
         
         // 创建一些测试条目
         let entries = vec![
-            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: 1 },
-            Entry::Data { mbr: Rectangle::new(10.0, 10.0, 11.0, 11.0), data: 2 },
-            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: 3 },
-            Entry::Data { mbr: Rectangle::new(10.5, 10.5, 11.5, 11.5), data: 4 },
+            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: "1".to_string() },
+            Entry::Data { mbr: Rectangle::new(10.0, 10.0, 11.0, 11.0), data: "2".to_string() },
+            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: "3".to_string() },
+            Entry::Data { mbr: Rectangle::new(10.5, 10.5, 11.5, 11.5), data: "4".to_string() },
         ];
         
         let (group1, group2) = rtree.quadratic_split(entries);
@@ -304,16 +304,16 @@ mod tests {
         assert!(group2.len() >= rtree.min_entries());
         
         // 验证相似的条目被分到同一组
-        let group1_data: Vec<i32> = group1.iter().filter_map(|e| e.data()).collect();
-        let group2_data: Vec<i32> = group2.iter().filter_map(|e| e.data()).collect();
+        let group1_data: Vec<String> = group1.iter().filter_map(|e| e.data()).collect();
+        let group2_data: Vec<String> = group2.iter().filter_map(|e| e.data()).collect();
         
         // 根据空间位置，(1,3)应该在一组，(2,4)应该在另一组
         // 或者(1,2)在一组，(3,4)在另一组，取决于种子选择
         assert!(
-            (group1_data.contains(&1) && group1_data.contains(&3)) ||
-            (group2_data.contains(&1) && group2_data.contains(&3)) ||
-            (group1_data.contains(&2) && group1_data.contains(&4)) ||
-            (group2_data.contains(&2) && group2_data.contains(&4))
+            (group1_data.contains(&"1".to_string()) && group1_data.contains(&"3".to_string())) ||
+            (group2_data.contains(&"1".to_string()) && group2_data.contains(&"3".to_string())) ||
+            (group1_data.contains(&"2".to_string()) && group1_data.contains(&"4".to_string())) ||
+            (group2_data.contains(&"2".to_string()) && group2_data.contains(&"4".to_string()))
         );
     }
     
@@ -322,11 +322,11 @@ mod tests {
         let mut rtree = RTree::new(3); // 最大3个条目，最小1个
         
         // 插入足够多的数据以触发分裂
-        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), 1);
-        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), 2);
-        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), 3);
-        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), 4); // 这应该触发分裂
-        
+        rtree.insert(Rectangle::new(0.0, 0.0, 1.0, 1.0), "1".to_string());
+        rtree.insert(Rectangle::new(2.0, 2.0, 3.0, 3.0), "2".to_string());
+        rtree.insert(Rectangle::new(4.0, 4.0, 5.0, 5.0), "3".to_string());
+        rtree.insert(Rectangle::new(6.0, 6.0, 7.0, 7.0), "4".to_string()); // 这应该触发分裂
+
         // 验证树结构 - 根节点应该不再是叶子节点
         assert!(!rtree.is_empty());
         let root = rtree.root_ref().as_ref().unwrap();
@@ -340,10 +340,10 @@ mod tests {
         // 搜索应该仍然工作
         let results = rtree.search_bbox(&Rectangle::new(0.0, 0.0, 10.0, 10.0));
         assert_eq!(results.len(), 4);
-        assert!(results.contains(&1));
-        assert!(results.contains(&2));
-        assert!(results.contains(&3));
-        assert!(results.contains(&4));
+        assert!(results.contains(&"1".to_string()));
+        assert!(results.contains(&"2".to_string()));
+        assert!(results.contains(&"3".to_string()));
+        assert!(results.contains(&"4".to_string()));
     }
 
     #[test]
@@ -352,10 +352,10 @@ mod tests {
         
         // 创建测试条目：两个靠近的和两个相距很远的
         let entries = vec![
-            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: 1 },    // 靠近第3个
-            Entry::Data { mbr: Rectangle::new(100.0, 100.0, 101.0, 101.0), data: 2 }, // 很远
-            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: 3 },    // 靠近第1个
-            Entry::Data { mbr: Rectangle::new(50.0, 50.0, 51.0, 51.0), data: 4 },  // 中等距离
+            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: "1".to_string() },    // 靠近第3个
+            Entry::Data { mbr: Rectangle::new(100.0, 100.0, 101.0, 101.0), data: "2".to_string() }, // 很远
+            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: "3".to_string() },    // 靠近第1个
+            Entry::Data { mbr: Rectangle::new(50.0, 50.0, 51.0, 51.0), data: "4".to_string() },  // 中等距离
         ];
         
         let (seed1, seed2) = rtree.pick_seeds(&entries);
@@ -367,10 +367,10 @@ mod tests {
         
         // 验证选择的是相距较远的条目
         assert!(
-            (seed_data1 == 1 && seed_data2 == 2) ||
-            (seed_data1 == 2 && seed_data2 == 1) ||
-            (seed_data1 == 3 && seed_data2 == 2) ||
-            (seed_data1 == 2 && seed_data2 == 3)
+            (seed_data1 == "1" && seed_data2 == "2") ||
+            (seed_data1 == "2" && seed_data2 == "1") ||
+            (seed_data1 == "3" && seed_data2 == "2") ||
+            (seed_data1 == "2" && seed_data2 == "3")
         );
     }
 
@@ -380,9 +380,9 @@ mod tests {
         
         // 创建一组条目
         let group = vec![
-            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: 1 },
-            Entry::Data { mbr: Rectangle::new(2.0, 2.0, 3.0, 3.0), data: 2 },
-            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: 3 },
+            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: "1".to_string() },
+            Entry::Data { mbr: Rectangle::new(2.0, 2.0, 3.0, 3.0), data: "2".to_string() },
+            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: "3".to_string() },
         ];
         
         let group_mbr = rtree.calculate_group_mbr(&group);
@@ -397,16 +397,16 @@ mod tests {
         
         // 创建两个组
         let group1 = vec![
-            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: 1 },
+            Entry::Data { mbr: Rectangle::new(0.0, 0.0, 1.0, 1.0), data: "1".to_string() },
         ];
         let group2 = vec![
-            Entry::Data { mbr: Rectangle::new(10.0, 10.0, 11.0, 11.0), data: 2 },
+            Entry::Data { mbr: Rectangle::new(10.0, 10.0, 11.0, 11.0), data: "2".to_string() },
         ];
         
         // 创建剩余条目
         let remaining = vec![
-            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: 3 }, // 更接近group1
-            Entry::Data { mbr: Rectangle::new(10.5, 10.5, 11.5, 11.5), data: 4 }, // 更接近group2
+            Entry::Data { mbr: Rectangle::new(0.5, 0.5, 1.5, 1.5), data: "3".to_string() }, // 更接近group1
+            Entry::Data { mbr: Rectangle::new(10.5, 10.5, 11.5, 11.5), data: "4".to_string() }, // 更接近group2
         ];
         
         let (next_index, preferred_group) = rtree.pick_next(&remaining, &group1, &group2);

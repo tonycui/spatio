@@ -103,16 +103,38 @@ impl<'a> ArgumentParser<'a> {
 
     /// 解析 INTERSECTS 命令的参数
     pub fn parse_intersects_args(&self) -> std::result::Result<IntersectsArgs, String> {
-        self.check_arg_count(2)?;
+        // 支持2个或3个参数
+        if self.args.len() < 2 || self.args.len() > 3 {
+            return Err(format!(
+                "ERR wrong number of arguments for 'INTERSECTS' command. Expected 2 or 3, got {}",
+                self.args.len()
+            ));
+        }
         
         let collection_id = self.get_string(0, "collection ID")?;
         let geometry = self.get_geometry(1)?;
         
+        // 解析可选的 limit 参数
+        let limit = if self.args.len() == 3 {
+            self.get_integer(2, "limit")?
+        } else {
+            0 // 默认值，表示无限制
+        };
+
         Ok(IntersectsArgs {
             collection_id: collection_id.to_string(),
             geometry,
+            limit,
         })
     }
+
+    /// 获取整数参数
+    pub fn get_integer(&self, index: usize, param_name: &str) -> std::result::Result<usize, String> {
+        let str_val = self.get_string(index, param_name)?;
+        str_val.parse::<usize>()
+            .map_err(|_| format!("ERR invalid {}: expected positive integer", param_name))
+    }
+    
 }
 
 /// SET 命令的解析结果
@@ -135,6 +157,7 @@ pub struct GetArgs {
 pub struct IntersectsArgs {
     pub collection_id: String,
     pub geometry: Geometry,
+    pub limit: usize,
 }
 
 #[cfg(test)]

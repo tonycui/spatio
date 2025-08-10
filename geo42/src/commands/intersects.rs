@@ -37,7 +37,7 @@ impl Command for IntersectsCommand {
             };
             
             // 执行空间查询
-            match database.intersects(&parsed_args.collection_id, &parsed_args.geometry).await {
+            match database.intersects(&parsed_args.collection_id, &parsed_args.geometry, parsed_args.limit).await {
                 Ok(results) => {
                     if results.is_empty() {
                         Ok(RespResponse::array(None))

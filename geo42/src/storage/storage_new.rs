@@ -149,7 +149,7 @@ impl GeoDatabase {
     }
 
     /// 异步空间查询：返回与指定几何体相交的所有对象
-    pub async fn intersects(&self, collection_id: &str, geometry: &Geometry) -> Result<Vec<GeoItem>> {
+    pub async fn intersects(&self, collection_id: &str, geometry: &Geometry, limit: usize) -> Result<Vec<GeoItem>> {
         // 1. 获取 collection
         let collections = self.collections.read().await;
         let collection = match collections.get(collection_id) {
@@ -161,7 +161,7 @@ impl GeoDatabase {
         // 2. 获取 collection 数据的读锁
         let data = collection.read().await;
 
-        let search_results = data.search(geometry);
+        let search_results = data.search(geometry, limit);
 
         Ok(search_results)
     }
@@ -304,7 +304,7 @@ mod tests {
         });
         let query_geometry = json_to_geometry(&query_area);
         
-        let results = db.intersects("test", &query_geometry).await.unwrap();
+        let results = db.intersects("test", &query_geometry,100).await.unwrap();
         
         // 应该找到 point1 和 point2，但不包括 point3
         assert_eq!(results.len(), 2);
@@ -318,7 +318,7 @@ mod tests {
         assert!(!ids.contains("point3"));
         
         // 测试查询不存在的 collection
-        let empty_results = db.intersects("nonexistent", &query_geometry).await.unwrap();
+        let empty_results = db.intersects("nonexistent", &query_geometry,100).await.unwrap();
         assert!(empty_results.is_empty());
     }
 
@@ -353,7 +353,7 @@ mod tests {
         
         // 使用三角形进行查询
         let triangle_geometry = json_to_geometry(&triangle);
-        let results = db.intersects("test", &triangle_geometry).await.unwrap();
+        let results = db.intersects("test", &triangle_geometry,100).await.unwrap();
         
         // 精确几何相交应该只返回真正在三角形内的点
         println!("Results: {:?}", results.iter().map(|r| &r.id).collect::<Vec<_>>());
@@ -394,7 +394,7 @@ mod tests {
             "coordinates": [1.0, 1.0]
         });
         let query_geometry = json_to_geometry(&valid_query);
-        let result = db.intersects("test", &query_geometry).await;
+        let result = db.intersects("test", &query_geometry,100).await;
         
         // 应该返回成功（空结果）
         assert!(result.is_ok());

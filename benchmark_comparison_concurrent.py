@@ -26,7 +26,9 @@ class GeoConcurrentBenchmark:
         
         # 线程本地存储，为每个线程创建独立的连接
         self._local_connections = threading.local()
-    
+
+        self.limit = 1000
+
     def get_geo42_connection(self):
         """获取线程本地的 geo42 连接"""
         if not hasattr(self._local_connections, 'geo42_client'):
@@ -182,7 +184,7 @@ class GeoConcurrentBenchmark:
         start_time = time.time()
         try:
             client = self.get_geo42_connection()
-            result = client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry))
+            result = client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry), self.limit)
             end_time = time.time()
             return {
                 'success': True,
@@ -202,7 +204,7 @@ class GeoConcurrentBenchmark:
         start_time = time.time()
         try:
             client = self.get_tile38_connection()
-            result = client.execute_command("INTERSECTS", self.collection_name, "LIMIT", "100000", "OBJECT", json.dumps(geometry))
+            result = client.execute_command("INTERSECTS", self.collection_name, "LIMIT", str(self.limit), "OBJECT", json.dumps(geometry))
             end_time = time.time()
             return {
                 'success': True,

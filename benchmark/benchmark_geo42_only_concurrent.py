@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-geo42 高并发性能测试脚本（多线程版本）
+spatio 高并发性能测试脚本（多线程版本）
 """
 
 import redis
@@ -12,7 +12,7 @@ from typing import List, Dict, Any
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
 
-class Geo42ConcurrentBenchmark:
+class SpatioConcurrentBenchmark:
     def __init__(self):
         # 新加坡边界 (大约)
         self.singapore_bounds = {
@@ -32,7 +32,7 @@ class Geo42ConcurrentBenchmark:
         if not hasattr(self._local_connections, 'client'):
             self._local_connections.client = redis.Redis(
                 host='localhost', 
-                port=9851, 
+                port=6379, 
                 decode_responses=True,
                 socket_connect_timeout=5,
                 socket_timeout=5,
@@ -91,8 +91,8 @@ class Geo42ConcurrentBenchmark:
             print(f"插入失败: {e}")
             return False
     
-    def insert_data_geo42_concurrent(self, data: List[Dict[str, Any]], max_workers: int = 500):
-        """并发插入数据到 geo42"""
+    def insert_data_spatio_concurrent(self, data: List[Dict[str, Any]], max_workers: int = 500):
+        """并发插入数据到 spatio"""
         print(f"开始并发插入数据，并发数: {max_workers}")
         start_time = time.time()
         
@@ -144,7 +144,7 @@ class Geo42ConcurrentBenchmark:
                 'error': str(e)
             }
     
-    def query_intersects_geo42_concurrent(self, geometries: List[Dict[str, Any]], max_workers: int = 500) -> List[float]:
+    def query_intersects_spatio_concurrent(self, geometries: List[Dict[str, Any]], max_workers: int = 500) -> List[float]:
         """并发查询 intersects"""
         print(f"开始并发查询测试，并发数: {max_workers}")
         
@@ -180,7 +180,7 @@ class Geo42ConcurrentBenchmark:
     
     def run_benchmark(self, data_count: int = 50000, query_count: int = 5000, max_workers: int = 100):
         """运行高并发性能测试"""
-        print(f"开始 geo42 高并发性能测试:")
+        print(f"开始 spatio 高并发性能测试:")
         print(f"  数据量: {data_count}")
         print(f"  查询数: {query_count}")
         print(f"  并发数: {max_workers}")
@@ -194,58 +194,58 @@ class Geo42ConcurrentBenchmark:
         query_geometries = [self.generate_random_polygon_in_singapore() for _ in range(query_count)]
         
         # 并发插入数据
-        self.insert_data_geo42_concurrent(test_data, max_workers)
+        self.insert_data_spatio_concurrent(test_data, max_workers)
         
         print("等待 2 秒让系统稳定...")
         time.sleep(2)
         
         # 并发查询测试
         start_time = time.time()
-        geo42_times = self.query_intersects_geo42_concurrent(query_geometries, max_workers)
+        spatio_times = self.query_intersects_spatio_concurrent(query_geometries, max_workers)
         end_time = time.time()
         
         total_query_time = end_time - start_time
         
         # 输出结果
-        self.print_results(geo42_times, total_query_time)
+        self.print_results(spatio_times, total_query_time)
     
-    def print_results(self, geo42_times: List[float], total_time: float):
+    def print_results(self, spatio_times: List[float], total_time: float):
         """打印性能测试结果"""
         print("\n" + "="*60)
-        print("geo42 高并发性能测试结果")
+        print("spatio 高并发性能测试结果")
         print("="*60)
         
-        if not geo42_times:
+        if not spatio_times:
             print("没有成功的查询结果")
             return
         
         # 统计数据
-        geo42_avg = statistics.mean(geo42_times) * 1000  # 转换为毫秒
-        geo42_min = min(geo42_times) * 1000
-        geo42_max = max(geo42_times) * 1000
-        geo42_median = statistics.median(geo42_times) * 1000
+        spatio_avg = statistics.mean(spatio_times) * 1000  # 转换为毫秒
+        spatio_min = min(spatio_times) * 1000
+        spatio_max = max(spatio_times) * 1000
+        spatio_median = statistics.median(spatio_times) * 1000
         
         # 计算百分位数
-        sorted_times = sorted(geo42_times)
+        sorted_times = sorted(spatio_times)
         p95 = sorted_times[int(len(sorted_times) * 0.95)] * 1000
         p99 = sorted_times[int(len(sorted_times) * 0.99)] * 1000
         
         # 计算 QPS
-        total_queries = len(geo42_times)
+        total_queries = len(spatio_times)
         qps = total_queries / total_time
         
         print(f"总查询数: {total_queries}")
         print(f"总耗时: {total_time:.2f}s")
         print(f"QPS (每秒查询数): {qps:.2f}")
-        print(f"平均响应时间: {geo42_avg:.2f}ms")
-        print(f"最小响应时间: {geo42_min:.2f}ms")
-        print(f"最大响应时间: {geo42_max:.2f}ms")
-        print(f"中位数响应时间: {geo42_median:.2f}ms")
+        print(f"平均响应时间: {spatio_avg:.2f}ms")
+        print(f"最小响应时间: {spatio_min:.2f}ms")
+        print(f"最大响应时间: {spatio_max:.2f}ms")
+        print(f"中位数响应时间: {spatio_median:.2f}ms")
         print(f"95% 响应时间: {p95:.2f}ms")
         print(f"99% 响应时间: {p99:.2f}ms")
 
 if __name__ == "__main__":
-    benchmark = Geo42ConcurrentBenchmark()
+    benchmark = SpatioConcurrentBenchmark()
     
     # 可以调整参数进行不同规模的测试
     # 建议先用较小的并发数测试，确认系统稳定后再提升

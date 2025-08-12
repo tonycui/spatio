@@ -23,7 +23,7 @@ impl TcpServer {
         let addr = format!("{}:{}", self.config.host, self.config.port);
         let listener = TcpListener::bind(&addr).await?;
         
-        info!("Geo42 server listening on {}", addr);
+        info!("Spatio server listening on {}", addr);
         info!("Ready to accept connections");
 
         loop {

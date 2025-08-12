@@ -2,9 +2,9 @@ use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "geo42-cli",
-    about = "A command line interface for geo42 server",
-    long_about = "geo42-cli is a command line client for the geo42 geospatial database server.\nIt allows you to connect to a geo42 server and execute commands interactively or non-interactively."
+    name = "spatio-cli",
+    about = "A command line interface for spatio server",
+    long_about = "spatio-cli is a command line client for the spatio geospatial database server.\nIt allows you to connect to a spatio server and execute commands interactively or non-interactively."
 )]
 pub struct CliArgs {
     /// Server hostname

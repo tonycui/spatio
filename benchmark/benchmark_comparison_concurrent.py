@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-geo42 vs tile38 intersects 性能对比脚本（多线程版本）
+spatio vs tile38 intersects 性能对比脚本（多线程版本）
 """
 
 import redis
@@ -29,10 +29,10 @@ class GeoConcurrentBenchmark:
 
         self.limit = 1000
 
-    def get_geo42_connection(self):
-        """获取线程本地的 geo42 连接"""
-        if not hasattr(self._local_connections, 'geo42_client'):
-            self._local_connections.geo42_client = redis.Redis(
+    def get_spatio_connection(self):
+        """获取线程本地的 spatio 连接"""
+        if not hasattr(self._local_connections, 'spatio_client'):
+            self._local_connections.spatio_client = redis.Redis(
                 host='localhost', 
                 port=6379, 
                 decode_responses=True,
@@ -41,7 +41,7 @@ class GeoConcurrentBenchmark:
                 retry_on_timeout=True,
                 health_check_interval=30
             )
-        return self._local_connections.geo42_client
+        return self._local_connections.spatio_client
     
     def get_tile38_connection(self):
         """获取线程本地的 tile38 连接"""
@@ -97,14 +97,14 @@ class GeoConcurrentBenchmark:
             data.append(item)
         return data
     
-    def insert_single_item_geo42(self, item: Dict[str, Any]) -> bool:
-        """向 geo42 插入单个数据项"""
+    def insert_single_item_spatio(self, item: Dict[str, Any]) -> bool:
+        """向 spatio 插入单个数据项"""
         try:
-            client = self.get_geo42_connection()
+            client = self.get_spatio_connection()
             client.execute_command("SET", self.collection_name, item['id'], json.dumps(item['geometry']))
             return True
         except Exception as e:
-            print(f"geo42 插入失败: {e}")
+            print(f"spatio 插入失败: {e}")
             return False
     
     def insert_single_item_tile38(self, item: Dict[str, Any]) -> bool:
@@ -117,31 +117,31 @@ class GeoConcurrentBenchmark:
             print(f"tile38 插入失败: {e}")
             return False
     
-    def insert_data_geo42_concurrent(self, data: List[Dict[str, Any]], max_workers: int = 100):
-        """并发插入数据到 geo42"""
-        print(f"开始并发插入数据到 geo42，并发数: {max_workers}")
+    def insert_data_spatio_concurrent(self, data: List[Dict[str, Any]], max_workers: int = 100):
+        """并发插入数据到 spatio"""
+        print(f"开始并发插入数据到 spatio，并发数: {max_workers}")
         start_time = time.time()
         
         success_count = 0
         total_count = len(data)
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(self.insert_single_item_geo42, item) for item in data]
+            futures = [executor.submit(self.insert_single_item_spatio, item) for item in data]
             
             for i, future in enumerate(as_completed(futures)):
                 if i % 5000 == 0:
-                    print(f"geo42 插入进度: {i}/{total_count} ({i/total_count*100:.1f}%)")
+                    print(f"spatio 插入进度: {i}/{total_count} ({i/total_count*100:.1f}%)")
                 
                 try:
                     if future.result():
                         success_count += 1
                 except Exception as e:
-                    print(f"geo42 任务执行失败: {e}")
+                    print(f"spatio 任务执行失败: {e}")
         
         end_time = time.time()
         duration = end_time - start_time
         
-        print(f"geo42 并发插入完成:")
+        print(f"spatio 并发插入完成:")
         print(f"  总数: {total_count}")
         print(f"  成功: {success_count}")
         print(f"  失败: {total_count - success_count}")
@@ -179,11 +179,11 @@ class GeoConcurrentBenchmark:
         print(f"  耗时: {duration:.2f}s")
         print(f"  吞吐量: {success_count/duration:.2f} ops/s")
     
-    def query_single_intersects_geo42(self, geometry: Dict[str, Any]) -> Dict[str, Any]:
-        """执行单个 geo42 intersects 查询"""
+    def query_single_intersects_spatio(self, geometry: Dict[str, Any]) -> Dict[str, Any]:
+        """执行单个 spatio intersects 查询"""
         start_time = time.time()
         try:
-            client = self.get_geo42_connection()
+            client = self.get_spatio_connection()
             result = client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry), self.limit)
             end_time = time.time()
             return {
@@ -219,20 +219,20 @@ class GeoConcurrentBenchmark:
                 'error': str(e)
             }
     
-    def query_intersects_geo42_concurrent(self, geometries: List[Dict[str, Any]], max_workers: int = 100) -> List[float]:
-        """并发查询 geo42 intersects"""
-        print(f"开始并发查询 geo42，并发数: {max_workers}")
+    def query_intersects_spatio_concurrent(self, geometries: List[Dict[str, Any]], max_workers: int = 100) -> List[float]:
+        """并发查询 spatio intersects"""
+        print(f"开始并发查询 spatio，并发数: {max_workers}")
         
         query_times = []
         success_count = 0
         total_count = len(geometries)
         
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = [executor.submit(self.query_single_intersects_geo42, geom) for geom in geometries]
+            futures = [executor.submit(self.query_single_intersects_spatio, geom) for geom in geometries]
             
             for i, future in enumerate(as_completed(futures)):
                 if i % 100 == 0:
-                    print(f"geo42 查询进度: {i}/{total_count} ({i/total_count*100:.1f}%)")
+                    print(f"spatio 查询进度: {i}/{total_count} ({i/total_count*100:.1f}%)")
                 
                 try:
                     result = future.result()
@@ -240,11 +240,11 @@ class GeoConcurrentBenchmark:
                         query_times.append(result['duration'])
                         success_count += 1
                     else:
-                        print(f"geo42 查询失败: {result['error']}")
+                        print(f"spatio 查询失败: {result['error']}")
                 except Exception as e:
-                    print(f"geo42 查询任务失败: {e}")
+                    print(f"spatio 查询任务失败: {e}")
         
-        print(f"geo42 查询测试完成: 成功 {success_count}/{total_count}")
+        print(f"spatio 查询测试完成: 成功 {success_count}/{total_count}")
         return query_times
     
     def query_intersects_tile38_concurrent(self, geometries: List[Dict[str, Any]], max_workers: int = 100) -> List[float]:
@@ -277,7 +277,7 @@ class GeoConcurrentBenchmark:
     
     def run_benchmark(self, data_count: int = 50000, query_count: int = 5000, max_workers: int = 100):
         """运行高并发性能对比测试"""
-        print(f"开始 geo42 vs tile38 高并发性能对比测试:")
+        print(f"开始 spatio vs tile38 高并发性能对比测试:")
         print(f"  数据量: {data_count}")
         print(f"  查询数: {query_count}")
         print(f"  并发数: {max_workers}")
@@ -291,7 +291,7 @@ class GeoConcurrentBenchmark:
         query_geometries = [self.generate_random_polygon_in_singapore() for _ in range(query_count)]
         
         # 并发插入数据
-        self.insert_data_geo42_concurrent(test_data, max_workers)
+        self.insert_data_spatio_concurrent(test_data, max_workers)
         self.insert_data_tile38_concurrent(test_data, max_workers)
         
         print("等待 3 秒让系统稳定...")
@@ -300,10 +300,10 @@ class GeoConcurrentBenchmark:
         # 并发查询测试
         print("\n开始查询性能测试...")
         
-        # geo42 查询测试
+        # spatio 查询测试
         start_time = time.time()
-        geo42_times = self.query_intersects_geo42_concurrent(query_geometries, max_workers)
-        geo42_total_time = time.time() - start_time
+        spatio_times = self.query_intersects_spatio_concurrent(query_geometries, max_workers)
+        spatio_total_time = time.time() - start_time
         
         # tile38 查询测试
         start_time = time.time()
@@ -311,25 +311,25 @@ class GeoConcurrentBenchmark:
         tile38_total_time = time.time() - start_time
         
         # 输出结果
-        self.print_results(geo42_times, tile38_times, geo42_total_time, tile38_total_time)
+        self.print_results(spatio_times, tile38_times, spatio_total_time, tile38_total_time)
     
-    def print_results(self, geo42_times: List[float], tile38_times: List[float], geo42_total_time: float, tile38_total_time: float):
+    def print_results(self, spatio_times: List[float], tile38_times: List[float], spatio_total_time: float, tile38_total_time: float):
         """打印性能测试结果"""
         print("\n" + "="*60)
-        print("geo42 vs tile38 高并发性能对比结果")
+        print("spatio vs tile38 高并发性能对比结果")
         print("="*60)
         
-        if not geo42_times or not tile38_times:
+        if not spatio_times or not tile38_times:
             print("查询结果不完整，无法进行对比")
             return
         
         # 统计数据
-        geo42_avg = statistics.mean(geo42_times) * 1000  # 转换为毫秒
-        geo42_min = min(geo42_times) * 1000
-        geo42_max = max(geo42_times) * 1000
-        geo42_median = statistics.median(geo42_times) * 1000
-        geo42_p95 = sorted(geo42_times)[int(len(geo42_times) * 0.95)] * 1000
-        geo42_qps = len(geo42_times) / geo42_total_time
+        spatio_avg = statistics.mean(spatio_times) * 1000  # 转换为毫秒
+        spatio_min = min(spatio_times) * 1000
+        spatio_max = max(spatio_times) * 1000
+        spatio_median = statistics.median(spatio_times) * 1000
+        spatio_p95 = sorted(spatio_times)[int(len(spatio_times) * 0.95)] * 1000
+        spatio_qps = len(spatio_times) / spatio_total_time
         
         tile38_avg = statistics.mean(tile38_times) * 1000
         tile38_min = min(tile38_times) * 1000
@@ -338,27 +338,27 @@ class GeoConcurrentBenchmark:
         tile38_p95 = sorted(tile38_times)[int(len(tile38_times) * 0.95)] * 1000
         tile38_qps = len(tile38_times) / tile38_total_time
         
-        print(f"{'指标':<15} {'geo42':<15} {'tile38':<15} {'对比':<15}")
+        print(f"{'指标':<15} {'spatio':<15} {'tile38':<15} {'对比':<15}")
         print("-" * 60)
-        print(f"{'查询成功数':<15} {len(geo42_times):<15} {len(tile38_times):<15}")
-        print(f"{'QPS':<15} {geo42_qps:<15.2f} {tile38_qps:<15.2f} {geo42_qps/tile38_qps:<15.2f}x")
-        print(f"{'平均延迟(ms)':<15} {geo42_avg:<15.2f} {tile38_avg:<15.2f} {tile38_avg/geo42_avg:<15.2f}x")
-        print(f"{'中位数(ms)':<15} {geo42_median:<15.2f} {tile38_median:<15.2f} {tile38_median/geo42_median:<15.2f}x")
-        print(f"{'P95延迟(ms)':<15} {geo42_p95:<15.2f} {tile38_p95:<15.2f} {tile38_p95/geo42_p95:<15.2f}x")
-        print(f"{'最小延迟(ms)':<15} {geo42_min:<15.2f} {tile38_min:<15.2f}")
-        print(f"{'最大延迟(ms)':<15} {geo42_max:<15.2f} {tile38_max:<15.2f}")
+        print(f"{'查询成功数':<15} {len(spatio_times):<15} {len(tile38_times):<15}")
+        print(f"{'QPS':<15} {spatio_qps:<15.2f} {tile38_qps:<15.2f} {spatio_qps/tile38_qps:<15.2f}x")
+        print(f"{'平均延迟(ms)':<15} {spatio_avg:<15.2f} {tile38_avg:<15.2f} {tile38_avg/spatio_avg:<15.2f}x")
+        print(f"{'中位数(ms)':<15} {spatio_median:<15.2f} {tile38_median:<15.2f} {tile38_median/spatio_median:<15.2f}x")
+        print(f"{'P95延迟(ms)':<15} {spatio_p95:<15.2f} {tile38_p95:<15.2f} {tile38_p95/spatio_p95:<15.2f}x")
+        print(f"{'最小延迟(ms)':<15} {spatio_min:<15.2f} {tile38_min:<15.2f}")
+        print(f"{'最大延迟(ms)':<15} {spatio_max:<15.2f} {tile38_max:<15.2f}")
         
         print("\n" + "="*60)
         print("总结:")
-        if geo42_qps > tile38_qps:
-            print(f"🚀 geo42 QPS 比 tile38 高 {geo42_qps/tile38_qps:.2f}x")
+        if spatio_qps > tile38_qps:
+            print(f"🚀 spatio QPS 比 tile38 高 {spatio_qps/tile38_qps:.2f}x")
         else:
-            print(f"📊 tile38 QPS 比 geo42 高 {tile38_qps/geo42_qps:.2f}x")
+            print(f"📊 tile38 QPS 比 spatio 高 {tile38_qps/spatio_qps:.2f}x")
             
-        if geo42_avg < tile38_avg:
-            print(f"⚡ geo42 平均延迟比 tile38 低 {tile38_avg/geo42_avg:.2f}x")
+        if spatio_avg < tile38_avg:
+            print(f"⚡ spatio 平均延迟比 tile38 低 {tile38_avg/spatio_avg:.2f}x")
         else:
-            print(f"⏱️ tile38 平均延迟比 geo42 低 {geo42_avg/tile38_avg:.2f}x")
+            print(f"⏱️ tile38 平均延迟比 spatio 低 {spatio_avg/tile38_avg:.2f}x")
 
 if __name__ == "__main__":
     benchmark = GeoConcurrentBenchmark()

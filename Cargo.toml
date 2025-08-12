@@ -1,20 +1,22 @@
 [package]
-name = "geo42"
+name = "spatio"
 version = "0.1.0"
 edition = "2021"
-default-run = "geo42-server"
+default-run = "spatio-server"
+description = "A high-performance geospatial database written in Rust"
+license = "MIT"
 
 [lib]
-name = "geo42"
+name = "spatio"
 path = "lib.rs"
 
 [[bin]]
-name = "geo42-server"
-path = "bin/geo42-server.rs"
+name = "spatio-server"
+path = "bin/spatio-server.rs"
 
 [[bin]]
-name = "geo42-cli"
-path = "bin/geo42-cli.rs"
+name = "spatio-cli"
+path = "bin/spatio-cli.rs"
 
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }

@@ -1,10 +1,10 @@
-# Geo42 Project Roadmap
+# Spatio Project Roadmap
 
 > Goal: Build a modern geospatial database that provides the best performance and development experience
 
 ## 🎯 Project Overview
 
-Geo42 is a high-performance geospatial database developed in Rust, designed for modern applications. Our goal is to provide the best performance, stronger type safety, and a more modern development experience.
+Spatio is a high-performance geospatial database developed in Rust, designed for modern applications. Our goal is to provide the best performance, stronger type safety, and a more modern development experience.
 
 ### Core Advantages
 - 🚀 **High Performance**: Rust zero-cost abstractions + asynchronous architecture
@@ -118,7 +118,7 @@ Geo42 is a high-performance geospatial database developed in Rust, designed for 
 
 ### Advantages over Tile38
 
-| Feature | Tile38 | Geo42 | Advantage Description |
+| Feature | Tile38 | Spatio | Advantage Description |
 |---------|--------|-------|----------------------|
 | **Language** | Go | Rust | Better memory safety and performance |
 | **Concurrency Model** | Goroutines | Async/Await + RwLock | Lower memory/CPU overhead |
@@ -129,8 +129,8 @@ Geo42 is a high-performance geospatial database developed in Rust, designed for 
 ### Development Environment Setup
 ```bash
 # Clone project
-git clone https://github.com/your-org/geo42.git
-cd geo42
+git clone https://github.com/your-org/spatio.git
+cd spatio
 
 # Install dependencies
 cargo build
@@ -139,10 +139,10 @@ cargo build
 cargo test
 
 # Start service
-cargo run --bin geo42-server
+cargo run --bin spatio-server
 
 # Use client
-cargo run --bin geo42-cli -- PING
+cargo run --bin spatio-cli -- PING
 ```
 
 ### Code Standards

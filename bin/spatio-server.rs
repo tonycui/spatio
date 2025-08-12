@@ -1,5 +1,5 @@
-use geo42::{Config, Result};
-use geo42::server::TcpServer;
+use spatio::{Config, Result};
+use spatio::server::TcpServer;
 use tracing::{info, Level};
 use clap::Parser;
 
@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
         .with_target(false)
         .init();
 
-    info!("Starting Geo42 server...");
+    info!("Starting Spatio server...");
     info!("Version: {}", env!("CARGO_PKG_VERSION"));
 
     // 创建配置

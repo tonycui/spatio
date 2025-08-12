@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-geo42 vs tile38 intersects 性能对比脚本
+spatio vs tile38 intersects 性能对比脚本
 """
 
 import redis
@@ -21,7 +21,7 @@ class GeoBenchmark:
         }
         
         # Redis 连接
-        self.geo42_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self.spatio_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
         self.tile38_client = redis.Redis(host='localhost', port=9851, decode_responses=True)
         
         self.collection_name = "benchmark_collection"
@@ -66,20 +66,20 @@ class GeoBenchmark:
             data.append(item)
         return data
     
-    def insert_data_geo42(self, data: List[Dict[str, Any]]):
-        """向 geo42 插入数据"""
-        print("向 geo42 插入数据...")
+    def insert_data_spatio(self, data: List[Dict[str, Any]]):
+        """向 spatio 插入数据"""
+        print("向 spatio 插入数据...")
         start_time = time.time()
         
         for i, item in enumerate(data):
             if i % 10000 == 0:
-                print(f"geo42 插入进度: {i}/{len(data)}")
+                print(f"spatio 插入进度: {i}/{len(data)}")
             
-            # geo42 SET 命令格式: SET collection_name id geojson
-            self.geo42_client.execute_command("SET", self.collection_name, item['id'], json.dumps(item['geometry']))
+            # spatio SET 命令格式: SET collection_name id geojson
+            self.spatio_client.execute_command("SET", self.collection_name, item['id'], json.dumps(item['geometry']))
         
         end_time = time.time()
-        print(f"geo42 插入完成，耗时: {end_time - start_time:.2f}s")
+        print(f"spatio 插入完成，耗时: {end_time - start_time:.2f}s")
     
     def insert_data_tile38(self, data: List[Dict[str, Any]]):
         """向 tile38 插入数据"""
@@ -96,12 +96,12 @@ class GeoBenchmark:
         end_time = time.time()
         print(f"tile38 插入完成，耗时: {end_time - start_time:.2f}s")
     
-    def query_intersects_geo42(self, geometry: Dict[str, Any]) -> float:
-        """geo42 intersects 查询"""
+    def query_intersects_spatio(self, geometry: Dict[str, Any]) -> float:
+        """spatio intersects 查询"""
         start_time = time.time()
         
-        # geo42 INTERSECTS 命令格式: INTERSECTS collection_name geometry
-        self.geo42_client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry))
+        # spatio INTERSECTS 命令格式: INTERSECTS collection_name geometry
+        self.spatio_client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry))
         
         end_time = time.time()
         return end_time - start_time
@@ -128,21 +128,21 @@ class GeoBenchmark:
         query_geometries = [self.generate_random_polygon_in_singapore() for _ in range(query_count)]
         
         # 插入数据
-        self.insert_data_geo42(test_data)
+        self.insert_data_spatio(test_data)
         self.insert_data_tile38(test_data)
         
         print("等待 3 秒...")
         time.sleep(3)
         
-        # geo42 查询测试
-        print("开始 geo42 查询测试...")
-        geo42_times = []
+        # spatio 查询测试
+        print("开始 spatio 查询测试...")
+        spatio_times = []
         for i, geometry in enumerate(query_geometries):
             if i % 10 == 0:
-                print(f"geo42 查询进度: {i}/{query_count}")
+                print(f"spatio 查询进度: {i}/{query_count}")
             
-            query_time = self.query_intersects_geo42(geometry)
-            geo42_times.append(query_time)
+            query_time = self.query_intersects_spatio(geometry)
+            spatio_times.append(query_time)
         
         # tile38 查询测试
         print("开始 tile38 查询测试...")
@@ -155,33 +155,33 @@ class GeoBenchmark:
             tile38_times.append(query_time)
         
         # 输出结果
-        self.print_results(geo42_times, tile38_times)
+        self.print_results(spatio_times, tile38_times)
     
-    def print_results(self, geo42_times: List[float], tile38_times: List[float]):
+    def print_results(self, spatio_times: List[float], tile38_times: List[float]):
         """打印性能测试结果"""
         print("\n" + "="*60)
         print("性能测试结果")
         print("="*60)
         
         # 统计数据
-        geo42_avg = statistics.mean(geo42_times) * 1000  # 转换为毫秒
-        geo42_min = min(geo42_times) * 1000
-        geo42_max = max(geo42_times) * 1000
+        spatio_avg = statistics.mean(spatio_times) * 1000  # 转换为毫秒
+        spatio_min = min(spatio_times) * 1000
+        spatio_max = max(spatio_times) * 1000
         
         tile38_avg = statistics.mean(tile38_times) * 1000
         tile38_min = min(tile38_times) * 1000
         tile38_max = max(tile38_times) * 1000
         
-        print(f"geo42  - 平均: {geo42_avg:.2f}ms, 最小: {geo42_min:.2f}ms, 最大: {geo42_max:.2f}ms")
+        print(f"spatio  - 平均: {spatio_avg:.2f}ms, 最小: {spatio_min:.2f}ms, 最大: {spatio_max:.2f}ms")
         print(f"tile38 - 平均: {tile38_avg:.2f}ms, 最小: {tile38_min:.2f}ms, 最大: {tile38_max:.2f}ms")
         
         # 性能对比
-        if geo42_avg < tile38_avg:
-            speedup = tile38_avg / geo42_avg
-            print(f"\ngeo42 比 tile38 快 {speedup:.2f}x")
+        if spatio_avg < tile38_avg:
+            speedup = tile38_avg / spatio_avg
+            print(f"\nspatio 比 tile38 快 {speedup:.2f}x")
         else:
-            speedup = geo42_avg / tile38_avg
-            print(f"\ntile38 比 geo42 快 {speedup:.2f}x")
+            speedup = spatio_avg / tile38_avg
+            print(f"\ntile38 比 spatio 快 {speedup:.2f}x")
 
 if __name__ == "__main__":
     benchmark = GeoBenchmark()

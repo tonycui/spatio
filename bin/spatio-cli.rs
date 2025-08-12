@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
-use geo42::client::{ClientConnection, CliArgs, OutputFormatter};
-use geo42::Result;
+use spatio::client::{ClientConnection, CliArgs, OutputFormatter};
+use spatio::Result;
 
 fn main() -> Result<()> {
     let args = CliArgs::parse_args();
@@ -44,7 +44,7 @@ fn run_command_mode(connection: &mut ClientConnection, command: &[String]) -> Re
 }
 
 fn run_interactive_mode(connection: &mut ClientConnection, host: &str, port: u16) -> Result<()> {
-    println!("geo42-cli interactive mode");
+    println!("spatio-cli interactive mode");
     println!("{}", OutputFormatter::format_connecting_message(host, port));
     
     // 连接到服务器

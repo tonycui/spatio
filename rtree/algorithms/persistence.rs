@@ -47,7 +47,7 @@ impl RTree {
     /// 
     /// # 示例
     /// ```
-    /// use geo42::rtree::RTree;
+    /// use spatio::rtree::RTree;
     /// 
     /// let mut rtree = RTree::new(4);
     /// // ... 插入数据 ...
@@ -101,7 +101,7 @@ impl RTree {
     
     /// # 示例
     /// ```
-    /// use geo42::rtree::RTree;
+    /// use spatio::rtree::RTree;
     /// use geo::{Point, Geometry};
     /// use tempfile::NamedTempFile;
     ///

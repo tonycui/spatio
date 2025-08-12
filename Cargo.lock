@@ -412,27 +412,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "geo42"
-version = "0.1.0"
-dependencies = [
- "bincode",
- "clap",
- "colored",
- "criterion",
- "derive_more",
- "geo",
- "geojson",
- "rand",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 1.0.69",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "geographiclib-rs"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1054,6 +1033,27 @@ dependencies = [
  "num-traits",
  "robust",
  "smallvec",
+]
+
+[[package]]
+name = "spatio"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "clap",
+ "colored",
+ "criterion",
+ "derive_more",
+ "geo",
+ "geojson",
+ "rand",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

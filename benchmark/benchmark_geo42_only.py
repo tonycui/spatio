@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-geo42 性能测试脚本（仅测试 geo42）
+spatio 性能测试脚本（仅测试 spatio）
 """
 
 import redis
@@ -10,7 +10,7 @@ import time
 import statistics
 from typing import List, Dict, Any
 
-class Geo42Benchmark:
+class SpatioBenchmark:
     def __init__(self):
         # 新加坡边界 (大约)
         self.singapore_bounds = {
@@ -21,7 +21,7 @@ class Geo42Benchmark:
         }
         
         # Redis 连接
-        self.geo42_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
+        self.spatio_client = redis.Redis(host='localhost', port=6379, decode_responses=True)
         self.collection_name = "benchmark_collection"
     
     def generate_random_polygon_in_singapore(self) -> Dict[str, Any]:
@@ -64,34 +64,34 @@ class Geo42Benchmark:
             data.append(item)
         return data
     
-    def insert_data_geo42(self, data: List[Dict[str, Any]]):
-        """向 geo42 插入数据"""
-        print("向 geo42 插入数据...")
+    def insert_data_spatio(self, data: List[Dict[str, Any]]):
+        """向 spatio 插入数据"""
+        print("向 spatio 插入数据...")
         start_time = time.time()
         
         for i, item in enumerate(data):
             if i % 10000 == 0:
-                print(f"geo42 插入进度: {i}/{len(data)}")
+                print(f"spatio 插入进度: {i}/{len(data)}")
             
-            # geo42 SET 命令格式: SET collection_name id geojson
-            self.geo42_client.execute_command("SET", self.collection_name, item['id'], json.dumps(item['geometry']))
+            # spatio SET 命令格式: SET collection_name id geojson
+            self.spatio_client.execute_command("SET", self.collection_name, item['id'], json.dumps(item['geometry']))
         
         end_time = time.time()
-        print(f"geo42 插入完成，耗时: {end_time - start_time:.2f}s")
+        print(f"spatio 插入完成，耗时: {end_time - start_time:.2f}s")
     
-    def query_intersects_geo42(self, geometry: Dict[str, Any]) -> float:
-        """geo42 intersects 查询"""
+    def query_intersects_spatio(self, geometry: Dict[str, Any]) -> float:
+        """spatio intersects 查询"""
         start_time = time.time()
         
-        # geo42 INTERSECTS 命令格式: INTERSECTS collection_name geometry
-        self.geo42_client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry))
+        # spatio INTERSECTS 命令格式: INTERSECTS collection_name geometry
+        self.spatio_client.execute_command("INTERSECTS", self.collection_name, json.dumps(geometry))
         
         end_time = time.time()
         return end_time - start_time
     
     def run_benchmark(self, data_count: int = 100000, query_count: int = 100):
         """运行性能测试"""
-        print(f"开始 geo42 性能测试: {data_count} 条数据, {query_count} 次查询")
+        print(f"开始 spatio 性能测试: {data_count} 条数据, {query_count} 次查询")
         
         # 生成测试数据
         test_data = self.generate_test_data(data_count)
@@ -101,42 +101,42 @@ class Geo42Benchmark:
         query_geometries = [self.generate_random_polygon_in_singapore() for _ in range(query_count)]
         
         # 插入数据
-        self.insert_data_geo42(test_data)
+        self.insert_data_spatio(test_data)
         
         # print("等待 3 秒...")
         # time.sleep(3)
         
-        # geo42 查询测试
-        print("开始 geo42 查询测试...")
-        geo42_times = []
+        # spatio 查询测试
+        print("开始 spatio 查询测试...")
+        spatio_times = []
         for i, geometry in enumerate(query_geometries):
             if i % 10 == 0:
-                print(f"geo42 查询进度: {i}/{query_count}")
+                print(f"spatio 查询进度: {i}/{query_count}")
             
-            query_time = self.query_intersects_geo42(geometry)
-            geo42_times.append(query_time)
+            query_time = self.query_intersects_spatio(geometry)
+            spatio_times.append(query_time)
         
         # 输出结果
-        self.print_results(geo42_times)
+        self.print_results(spatio_times)
     
-    def print_results(self, geo42_times: List[float]):
+    def print_results(self, spatio_times: List[float]):
         """打印性能测试结果"""
         print("\n" + "="*60)
-        print("geo42 性能测试结果")
+        print("spatio 性能测试结果")
         print("="*60)
         
         # 统计数据
-        geo42_avg = statistics.mean(geo42_times) * 1000  # 转换为毫秒
-        geo42_min = min(geo42_times) * 1000
-        geo42_max = max(geo42_times) * 1000
-        geo42_median = statistics.median(geo42_times) * 1000
+        spatio_avg = statistics.mean(spatio_times) * 1000  # 转换为毫秒
+        spatio_min = min(spatio_times) * 1000
+        spatio_max = max(spatio_times) * 1000
+        spatio_median = statistics.median(spatio_times) * 1000
         
-        print(f"平均响应时间: {geo42_avg:.2f}ms")
-        print(f"最小响应时间: {geo42_min:.2f}ms")
-        print(f"最大响应时间: {geo42_max:.2f}ms")
-        print(f"中位数响应时间: {geo42_median:.2f}ms")
-        print(f"总查询数: {len(geo42_times)}")
+        print(f"平均响应时间: {spatio_avg:.2f}ms")
+        print(f"最小响应时间: {spatio_min:.2f}ms")
+        print(f"最大响应时间: {spatio_max:.2f}ms")
+        print(f"中位数响应时间: {spatio_median:.2f}ms")
+        print(f"总查询数: {len(spatio_times)}")
 
 if __name__ == "__main__":
-    benchmark = Geo42Benchmark()
+    benchmark = SpatioBenchmark()
     benchmark.run_benchmark(data_count=100000, query_count=1000)

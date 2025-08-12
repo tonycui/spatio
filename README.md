@@ -1,4 +1,4 @@
-# Geo42
+# Spatio
 
 > 🌍 A modern geospatial database built with Rust
 
@@ -8,7 +8,7 @@
 ## 📄 Licensedge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-Geo42 is a high-performance geospatial indexing service based on RTree, designed to provide the best performance and user experience.
+Spatio is a high-performance geospatial indexing service based on RTree, designed to provide the best performance and user experience.
 
 ## ✨ Features
 
@@ -25,16 +25,16 @@ Geo42 is a high-performance geospatial indexing service based on RTree, designed
 
 ```bash
 # Build from source
-git clone https://github.com/your-org/geo42.git
-cd geo42
+git clone https://github.com/your-org/spatio.git
+cd spatio
 cargo build --release
 ```
 
 ### Start Server
 
 ```bash
-# Start Geo42 server
-cargo run --bin geo42-server
+# Start Spatio server
+cargo run --bin spatio-server
 # Server will start on 127.0.0.1:9851
 ```
 
@@ -42,12 +42,12 @@ cargo run --bin geo42-server
 
 ```bash
 # Interactive mode
-cargo run --bin geo42-cli -- --interactive
+cargo run --bin spatio-cli -- --interactive
 
 # Direct command execution
-cargo run --bin geo42-cli -- PING
-cargo run --bin geo42-cli -- SET fleet truck1 '{"type":"Point","coordinates":[116.3,39.9]}'
-cargo run --bin geo42-cli -- GET fleet truck1
+cargo run --bin spatio-cli -- PING
+cargo run --bin spatio-cli -- SET fleet truck1 '{"type":"Point","coordinates":[116.3,39.9]}'
+cargo run --bin spatio-cli -- GET fleet truck1
 ```
 
 ## 📖 Basic Usage
@@ -83,13 +83,13 @@ PING
 
 ```
 ┌─────────────────┐    ┌─────────────────┐
-│   Geo42-CLI     │    │   Your App      │
+│   Spatio-CLI     │    │   Your App      │
 └─────────┬───────┘    └─────────┬───────┘
           │                      │
           └──────────┬───────────┘
                      │ RESP Protocol
           ┌──────────▼───────────┐
-          │    Geo42 Server      │
+          │    Spatio Server      │
           │                      │
           │  ┌─────────────────┐ │
           │  │ Command System  │ │
@@ -140,7 +140,7 @@ cargo bench
 
 Performance comparison with Tile38 (100K data, 10K queries, 100 concurrent, on MacBook Pro M2 16G):
 
-| Metric | Geo42 | Tile38 | Performance Gain |
+| Metric | Spatio | Tile38 | Performance Gain |
 |--------|-------|--------|------------------|
 | Successful Queries | 10,000 | 10,000 | - |
 | **QPS** | **320.18** | **68.89** | **4.65x** |
@@ -162,7 +162,7 @@ benchmark.run_benchmark(
 
 ### Performance Highlights
 
-- 🚀 **4.65x Higher QPS**: Geo42 achieves 320+ QPS, far exceeding Tile38's 68.89 QPS
+- 🚀 **4.65x Higher QPS**: Spatio achieves 320+ QPS, far exceeding Tile38's 68.89 QPS
 - ⚡ **5.2x Lower Latency**: Average query latency is only 1/5 of Tile38's
 - 📈 **Better Stability**: P95 latency controlled under 451ms, while Tile38 exceeds 2.2s
 - 💪 **Excellent Concurrency**: Maintains superior performance under 100 concurrent load

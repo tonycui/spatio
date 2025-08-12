@@ -20,7 +20,6 @@ impl RTree {
     }
 
     /// 仅使用边界框进行搜索（用于测试和简单查询）
-    /// todo : 现在只有大量的 test使用search_bbox，他们之前是使用 search 的，这个应该改为使用 search，并删除此方法。
     pub fn search_bbox(&self, query: &Rectangle) -> Vec<String> {
         let mut results = Vec::new();
         

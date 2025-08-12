@@ -160,19 +160,6 @@ pub fn geometries_intersect(geom1: &Geometry<f64>, geom2: &Geometry<f64>) -> boo
     geom1.intersects(geom2)
 }
 
-/// 计算两个几何体之间的欧几里得距离
-pub fn geometries_distance(geom1: &Geometry<f64>, geom2: &Geometry<f64>) -> f64 {
-    use geo::algorithm::euclidean_distance::EuclideanDistance;
-    geom1.euclidean_distance(geom2)
-}
-
-/// 计算两个几何体之间的地理距离（米）
-/// 注意：这个函数目前使用欧几里得距离作为近似
-pub fn geometries_haversine_distance(geom1: &Geometry<f64>, geom2: &Geometry<f64>) -> f64 {
-    // TODO: 实现真正的哈弗赛因距离计算
-    // 目前先使用欧几里得距离作为近似
-    geometries_distance(geom1, geom2)
-}
 
 /// 将 geo::Geometry 转换为 serde_json::Value (GeoJSON)
 pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
@@ -394,22 +381,4 @@ mod tests {
         assert!(result.is_err());
     }
 
-    #[test]
-    fn test_distance_calculation() {
-        let point1_json = json!({
-            "type": "Point",
-            "coordinates": [0.0, 0.0]
-        });
-        
-        let point2_json = json!({
-            "type": "Point",
-            "coordinates": [3.0, 4.0]
-        });
-        
-        let geom1 = geojson_to_geometry(&point1_json).unwrap();
-        let geom2 = geojson_to_geometry(&point2_json).unwrap();
-        
-        let distance = geometries_distance(&geom1, &geom2);
-        assert!((distance - 5.0).abs() < 1e-10); // 3-4-5 三角形
-    }
 }

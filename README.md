@@ -3,60 +3,62 @@
 > 🌍 A modern geospatial database built with Rust
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https- 💪 **Excellent Concurrency**: Maintains superior performance under 100 concurrent load
+
+## 📄 Licensedge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
-Geo42 是一个基于 RTree 高性能的地理空间索引服务，旨在提供最优秀的性能和使用体验。
+Geo42 is a high-performance geospatial indexing service based on RTree, designed to provide the best performance and user experience.
 
-## ✨ 特性
+## ✨ Features
 
-- 🚀 **高性能**: 目前基于 RTree 性能最好的空间索引服务
-- 🔒 **内存安全**: Rust 类型系统保证内存安全  
-- ⚡ **高并发**: 原生异步支持
-- 🌐 **协议兼容**: 支持 RESP 协议（Redis 兼容）
-- 📍 **空间索引**: 集成 R-tree 空间索引
-- 🛠️ **开发友好**: 清晰的错误信息和现代化工具
+- 🚀 **High Performance**: Currently the best-performing spatial indexing service based on RTree
+- 🔒 **Memory Safety**: Memory safety guaranteed by Rust's type system  
+- ⚡ **High Concurrency**: Native async support
+- 🌐 **Protocol Compatible**: Supports RESP protocol (Redis compatible)
+- 📍 **Spatial Indexing**: Integrated R-tree spatial indexing
+- 🛠️ **Developer Friendly**: Clear error messages and modern tooling
 
-## 🚀 快速开始
+## 🚀 Quick Start
 
-### 安装
+### Installation
 
 ```bash
-# 从源码构建
+# Build from source
 git clone https://github.com/your-org/geo42.git
 cd geo42
 cargo build --release
 ```
 
-### 启动服务器
+### Start Server
 
 ```bash
-# 启动 Geo42 服务器
+# Start Geo42 server
 cargo run --bin geo42-server
-# 服务器将在 127.0.0.1:9851 启动
+# Server will start on 127.0.0.1:9851
 ```
 
-### 使用客户端
+### Use Client
 
 ```bash
-# 交互模式
+# Interactive mode
 cargo run --bin geo42-cli -- --interactive
 
-# 直接执行命令
+# Direct command execution
 cargo run --bin geo42-cli -- PING
 cargo run --bin geo42-cli -- SET fleet truck1 '{"type":"Point","coordinates":[116.3,39.9]}'
 cargo run --bin geo42-cli -- GET fleet truck1
 ```
 
-## 📖 基础用法
+## 📖 Basic Usage
 
-### 存储地理空间数据
+### Store Geospatial Data
 
 ```bash
-# 存储一个点
+# Store a point
 SET fleet truck1 {"type":"Point","coordinates":[116.3974,39.9093]}
 
-# 存储一个多边形
+# Store a polygon
 SET boundaries beijing {
   "type": "Polygon",
   "coordinates": [[
@@ -67,17 +69,17 @@ SET boundaries beijing {
 }
 ```
 
-### 查询数据
+### Query Data
 
 ```bash
-# 获取对象
+# Get object
 GET fleet truck1
 
-# 测试连接
+# Test connection
 PING
 ```
 
-## 🏗️ 架构
+## 🏗️ Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────┐
@@ -99,83 +101,82 @@ PING
           └──────────────────────┘
 ```
 
-## 🛣️ 开发路线
+## 🛣️ Development Roadmap
 
-查看我们的详细 [路线图](ROADMAP.md) 了解项目计划和进展。
+Check our detailed [Roadmap](ROADMAP.md) for project plans and progress.
 
-### 当前状态
+### Current Status
 
-- ✅ 基础存储系统
-- ✅ RESP 协议支持  
-- ✅ R-tree 空间索引
-- ✅ SET/GET 命令
-- 🚧 空间查询命令 (进行中)
-- 📋 持久化系统 (计划中)
+- ✅ Basic storage system
+- ✅ RESP protocol support  
+- ✅ R-tree spatial indexing
+- ✅ SET/GET commands
+- ✅ Spatial query commands
 
 
-## 📚 文档
+## 📚 Documentation
 
-- [API 文档](docs/api.md)
-- [配置指南](docs/configuration.md)
-- [部署指南](docs/deployment.md)
-- [开发指南](docs/development.md)
+- [API Documentation](docs/api.md)
+- [Configuration Guide](docs/configuration.md)
+- [Deployment Guide](docs/deployment.md)
+- [Development Guide](docs/development.md)
 
-## 🧪 测试
+## 🧪 Testing
 
 ```bash
-# 运行所有测试
+# Run all tests
 cargo test
 
-# 运行特定模块测试
+# Run specific module tests
 cargo test storage::tests
 
-# 运行基准测试
+# Run benchmarks
 cargo bench
 ```
 
-## 📊 性能
+## 📊 Performance
 
-### 性能对比测试结果
+### Performance Comparison Results
 
-与 Tile38 的性能对比测试（10万条数据，1万次查询，100并发，On my macbook pro M2 16G）：
+Performance comparison with Tile38 (100K data, 10K queries, 100 concurrent, on MacBook Pro M2 16G):
 
-| 指标 | Geo42 | Tile38 | 性能提升 |
-|------|-------|--------|----------|
-| 查询成功数 | 10,000 | 10,000 | - |
+| Metric | Geo42 | Tile38 | Performance Gain |
+|--------|-------|--------|------------------|
+| Successful Queries | 10,000 | 10,000 | - |
 | **QPS** | **320.18** | **68.89** | **4.65x** |
-| **平均延迟** | **264.82ms** | **1,376.88ms** | **5.20x 更快** |
-| **中位数延迟** | **254.94ms** | **694.66ms** | **2.72x 更快** |
-| **P95延迟** | **451.01ms** | **2,252.80ms** | **5.00x 更快** |
-| 最小延迟 | 18.76ms | 7.85ms | - |
-| 最大延迟 | 839.51ms | 41,865.64ms | - |
+| **Average Latency** | **264.82ms** | **1,376.88ms** | **5.20x faster** |
+| **Median Latency** | **254.94ms** | **694.66ms** | **2.72x faster** |
+| **P95 Latency** | **451.01ms** | **2,252.80ms** | **5.00x faster** |
+| Min Latency | 18.76ms | 7.85ms | - |
+| Max Latency | 839.51ms | 41,865.64ms | - |
 
-### 测试配置
+### Test Configuration
 
 ```python
 benchmark.run_benchmark(
-    data_count=100000,    # 10万条数据
-    query_count=10000,    # 1万次查询
-    max_workers=100       # 100 并发
+    data_count=100000,    # 100K data points
+    query_count=10000,    # 10K queries
+    max_workers=100       # 100 concurrent workers
 )
 ```
 
-### 性能亮点
+### Performance Highlights
 
-- 🚀 **QPS 提升 4.65倍**: Geo42 达到 320+ QPS，远超 Tile38 的 68.89 QPS
-- ⚡ **延迟降低 5.2倍**: 平均查询延迟仅为 Tile38 的 1/5
-- � **稳定性更好**: P95延迟控制在 451ms，而 Tile38 超过 2.2s
-- 💪 **高并发表现**: 在 100 并发下仍保持优异性能
+- 🚀 **4.65x Higher QPS**: Geo42 achieves 320+ QPS, far exceeding Tile38's 68.89 QPS
+- ⚡ **5.2x Lower Latency**: Average query latency is only 1/5 of Tile38's
+- 📈 **Better Stability**: P95 latency controlled under 451ms, while Tile38 exceeds 2.2s
+- 💪 **Excellent Concurrency**: Maintains superior performance under 100 concurrent load
 
-## 📄 许可证
+## 📄 License
 
-本项目基于 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 致谢
+## 🙏 Acknowledgments
 
-- [Tile38](https://tile38.com/) - 对标来源
-- [Rust 社区](https://www.rust-lang.org/community) - 优秀的工具和库
-- 所有贡献者和支持者
+- [Tile38](https://tile38.com/) - Inspiration source
+- [Rust Community](https://www.rust-lang.org/community) - Excellent tools and libraries
+- All contributors and supporters
 
 ---
 
-**⭐ 如果这个项目对你有帮助，请给我们一个 Star！**
+**⭐ If this project helps you, please give us a Star!**

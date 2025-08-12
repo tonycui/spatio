@@ -1,158 +1,155 @@
-# Geo42 项目路线图
+# Geo42 Project Roadmap
 
-> 目标：构建一个现代化的地理空间数据库，提供最优秀的性能和开发体验
+> Goal: Build a modern geospatial database that provides the best performance and development experience
 
-## 🎯 项目概述
+## 🎯 Project Overview
 
-Geo42 是一个基于 Rust 开发的高性能地理空间数据库，专为现代应用程序设计。我们的目标是提供比 最好的性能、更强的类型安全和更现代的开发体验。
+Geo42 is a high-performance geospatial database developed in Rust, designed for modern applications. Our goal is to provide the best performance, stronger type safety, and a more modern development experience.
 
-### 核心优势
-- 🚀 **高性能**: Rust 零成本抽象 + 异步架构
-- 🔒 **内存安全**: Rust 类型系统保证内存安全
-- ⚡ **并发友好**: 原生异步支持，高并发处理
-- 🛠️ **开发友好**: 清晰的错误信息，现代化工具链
-- 🌐 **云原生**: 容器化优先，微服务友好
-- 🌐 **可扩展集群**: 可横向扩展的集群
-- 🌐 **可观察性**: 清晰易用的可观察性
+### Core Advantages
+- 🚀 **High Performance**: Rust zero-cost abstractions + asynchronous architecture
+- 🔒 **Memory Safety**: Memory safety guaranteed by Rust's type system
+- ⚡ **Concurrency Friendly**: Native async support for high-concurrency processing
+- 🛠️ **Developer Friendly**: Clear error messages and modern toolchain
+- 🌐 **Cloud Native**: Container-first, microservice-friendly
+- 🌐 **Scalable Clusters**: Horizontally scalable clusters
+- 🌐 **Observability**: Clear and easy-to-use observability
 
-## 📊 当前状态
+## 📊 Current Status
 
-### ✅ 已完成功能
+### ✅ Completed Features
 
-#### 基础架构
-- 异步 Tokio 运行时
-- RESP 协议支持（Redis 兼容）
+#### Basic Architecture
+- Asynchronous Tokio runtime
+- RESP protocol support (Redis compatible)
 
-#### 数据存储
-- GeoJSON 数据存储支持
-- geo::Geometry类型支持
-- R-tree 空间索引
-- 并发安全的存储架构
+#### Data Storage
+- GeoJSON data storage support
+- geo::Geometry type support
+- R-tree spatial indexing
+- Concurrent-safe storage architecture
 
-#### 基础命令
-- `SET` - 存储地理空间对象
-- `GET` - 获取地理空间对象
-- `INTERSECTS` - 相交查询（✨ 核心功能已实现）
-- `DELETE` - 删除地理空间对象（包含R-tree删除优化）
-- `PING` - 连接测试
+#### Basic Commands
+- `SET` - Store geospatial objects
+- `GET` - Retrieve geospatial objects
+- `INTERSECTS` - Intersection queries (✨ Core functionality implemented)
+- `DELETE` - Delete geospatial objects (includes R-tree deletion optimization)
+- `PING` - Connection testing
 
+#### Toolchain
+- CLI client (command-line and interactive modes)
+- Parameter parsing and validation system
+- Robust error handling mechanism
+- Performance benchmark suite (verified performance advantage vs Tile38)
 
-#### 工具链
-- CLI 客户端（命令行和交互模式）
-- 参数解析和验证系统
-- 健壮的错误处理机制
-- 性能基准测试套件（已验证vs Tile38性能优势）
+## 🚧 Development Roadmap
 
-## 🚧 开发路线图
+### Phase 1: Basic Core Spatial Functions (MVP)
+> Goal: Implement basic geospatial query functionality  
+> Status: Completed  
+> Planned completion: Completed
 
-### 第一阶段：基础核心空间功能（MVP）
-> 目标：实现基础的地理空间查询功能  
-> 状态：已完成  
-> 计划完成时间：已完成
+### Phase 2: Core Function Enhancement
+> Status: In Progress  
+> Planned completion: October 2025
 
-### 第二阶段：核心功能增强
-> 状态：进行中  
-> 计划完成时间：2025年10月
+**Spatial Query Enhancement**
+- [ ] `WITHIN` - Containment queries
+- [ ] `NEARBY` - Nearest neighbor queries
+- [ ] Query result sorting and pagination
 
-**空间查询增强**
-- [ ] `WITHIN` - 包含查询
-- [ ] `NEARBY` - 最近邻查询
-- [ ] 查询结果排序和分页
+**Data Management Commands**
+- [ ] `SCAN` - Scan all objects
+- [ ] `KEYS` - List all collections
+- [ ] `DROP` - Delete entire collection
+- [ ] `INFO` - Database statistics
 
+**Basic Persistence**
+- [ ] Data persistence to disk
+- [ ] Data recovery on startup
+- [ ] Basic WAL (Write-Ahead Log)
+- [ ] R-tree persistence optimization (based on existing serialization support)
 
-**数据管理命令**
-- [ ] `SCAN` - 扫描所有对象
-- [ ] `KEYS` - 列出所有 collection
-- [ ] `DROP` - 删除整个 collection
-- [ ] `INFO` - 数据库统计信息
+### Phase 3: Clustering and Distribution
+> Goal: Provide scalable distributed clusters  
+> Status: Not started  
+> Planned completion: December 2025
 
-**基础持久化**
-- [ ] 数据持久化到磁盘
-- [ ] 启动时数据恢复
-- [ ] 基础的 WAL（Write-Ahead Log）
-- [ ] R-tree 持久化优化（基于已有的序列化支持）
+- [ ] Master-slave replication
+  - [ ] Asynchronous replication
+- [ ] Sharding support
+  - [ ] Automatic sharding
+  - [ ] Data rebalancing
+- [ ] Cluster management
+  - [ ] Node discovery
+  - [ ] Health monitoring
+  - [ ] Load balancing
 
-### 第三阶段：集群和分布式
-> 目标：提供可扩展的分布式集群  
-> 状态：未开始  
-> 计划完成时间：2025年12月
+### Phase 4: Geofencing Management Backend
+> Goal: Comprehensive visual geofencing management backend  
+> Status: Not started  
+> Planned completion: February 2026
 
-- [ ] 主从复制
-  - [ ] 异步复制
-- [ ] 分片支持
-  - [ ] 自动分片
-  - [ ] 数据重平衡
-- [ ] 集群管理
-  - [ ] 节点发现
-  - [ ] 健康监控
-  - [ ] 负载均衡
-
-
-### 第四阶段： geofencing管理后台
-> 目标：可视化的完善的 geofencing 管理后台  
-> 状态：未开始  
-> 计划完成时间：2026年2月
-
-- [ ] Web 管理界面
-- [ ] 地图可视化工具
-- [ ] 数据导入/导出工具
-- [ ] 迁移工具
+- [ ] Web management interface
+- [ ] Map visualization tools
+- [ ] Data import/export tools
+- [ ] Migration tools
 
 
-### 第五阶段：生态系统
-> 目标：完善的开发者生态  
-> 时间：未开始  
-> 计划完成时间：2026年4月
+### Phase 5: Ecosystem
+> Goal: Comprehensive developer ecosystem  
+> Status: Not started  
+> Planned completion: April 2026
 
-**客户端库**
-- [ ] Python 客户端
-- [ ] JavaScript/Node.js 客户端  
-- [ ] Go 客户端
-- [ ] Java 客户端
-- [ ] .NET 客户端
-- [ ] PHP 客户端
+**Client Libraries**
+- [ ] Python client
+- [ ] JavaScript/Node.js client
+- [ ] Go client
+- [ ] Java client
+- [ ] .NET client
+- [ ] PHP client
 
-**云原生**
-- [ ] Kubernetes
-- [ ] 服务网格集成
-- [ ] 云存储后端支持
+**Cloud Native**
+- [ ] Kubernetes support
+- [ ] Service mesh integration
+- [ ] Cloud storage backend support
 
-## 🏆 竞争优势
+## 🏆 Competitive Advantages
 
-### 相比 Tile38 的优势
+### Advantages over Tile38
 
-| 特性 | Tile38 | Geo42 | 优势说明 |
-|-----|--------|-------|---------|
-| **语言** | Go | Rust | 更好的内存安全和性能 |
-| **并发模型** | Goroutines | Async/Await + RwLock | 更低的内存/CPU开销 |
-| **空间索引** | 基础R-tree | **高度优化的并发R-tree** | **4.65倍QPS提升，5.2倍延迟降低** |
-| **类型安全** | 运行时检查 | 编译时保证 | 更少的运行时错误 |
-| **内存管理** | GC | 零成本抽象 | **更可预测的性能** |
+| Feature | Tile38 | Geo42 | Advantage Description |
+|---------|--------|-------|----------------------|
+| **Language** | Go | Rust | Better memory safety and performance |
+| **Concurrency Model** | Goroutines | Async/Await + RwLock | Lower memory/CPU overhead |
+| **Spatial Indexing** | Basic R-tree | **Highly optimized concurrent R-tree** | **4.65x QPS improvement, 5.2x latency reduction** |
+| **Type Safety** | Runtime checks | Compile-time guarantees | Fewer runtime errors |
+| **Memory Management** | GC | Zero-cost abstractions | **More predictable performance** |
 
-### 开发环境设置
+### Development Environment Setup
 ```bash
-# 克隆项目
+# Clone project
 git clone https://github.com/your-org/geo42.git
 cd geo42
 
-# 安装依赖
+# Install dependencies
 cargo build
 
-# 运行测试
+# Run tests
 cargo test
 
-# 启动服务
+# Start service
 cargo run --bin geo42-server
 
-# 使用客户端
+# Use client
 cargo run --bin geo42-cli -- PING
 ```
 
-### 代码规范
+### Code Standards
 
-- 遵循 Rust 官方代码风格
-- 所有公共 API 必须有文档
-- 新功能必须包含测试
-- 提交信息遵循 Conventional Commits
+- Follow official Rust code style
+- All public APIs must have documentation
+- New features must include tests
+- Commit messages follow Conventional Commits
 
-*最后更新: 2025年7月*
+*Last updated: August 2025*

@@ -3,9 +3,9 @@
 > 🌍 A modern geospatial database built with Rust
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
-[![License](https- 💪 **Excellent Concurrency**: Maintains superior performance under 100 concurrent load
 
-## 📄 Licensedge/license-MIT-blue.svg)](LICENSE)
+## 📄 License
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
 Spatio is a high-performance geospatial indexing service based on RTree, designed to provide the best performance and user experience.
@@ -25,7 +25,7 @@ Spatio is a high-performance geospatial indexing service based on RTree, designe
 
 ```bash
 # Build from source
-git clone https://github.com/your-org/spatio.git
+git clone https://github.com/tonycui/spatio.git
 cd spatio
 cargo build --release
 ```
@@ -72,8 +72,11 @@ SET boundaries beijing {
 ### Query Data
 
 ```bash
-# Get object
-GET fleet truck1
+# Insert an irregular polygon (representing a city district)
+SET districts id_1 {"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}
+
+# Find all districts that intersect with the delivery zone
+INTERSECTS districts {"type":"Polygon","coordinates":[[[3.0,2.0],[7.0,1.5],[8.5,5.0],[6.0,7.0],[3.5,6.5],[3.0,2.0]]]}
 
 # Test connection
 PING
@@ -131,7 +134,7 @@ cargo test
 cargo test storage::tests
 
 # Run benchmarks
-cargo bench
+python3 benchmark/benchmark_geo42_only_concurrent.py
 ```
 
 ## 📊 Performance

@@ -1,7 +1,7 @@
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry};
-use crate::rtree::RTree;
-use crate::algorithms::utils::geometry_to_bbox;
+use super::super::rectangle::Rectangle;
+use super::super::node::{Node, Entry};
+use super::super::rtree::RTree;
+use super::utils::geometry_to_bbox;
 
 /// R-tree删除算法实现
 impl RTree {

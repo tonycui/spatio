@@ -1,4 +1,4 @@
-use crate::rectangle::Rectangle;
+use super::rectangle::Rectangle;
 use serde::{Deserialize, Serialize};
 
 /// R-tree节点类型

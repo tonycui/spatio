@@ -1,4 +1,4 @@
-use rtree::Rectangle;
+use crate::rtree::Rectangle;
 use crate::Result;
 
 /// 从坐标数组中提取边界框

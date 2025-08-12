@@ -1,5 +1,5 @@
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry};
+use super::super::rectangle::Rectangle;
+use super::super::node::{Node, Entry};
 use crate::rtree::RTree;
 
 /// 节点分裂算法 - 实现完整的二次分裂(Quadratic Split)

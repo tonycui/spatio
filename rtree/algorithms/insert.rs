@@ -1,9 +1,9 @@
 use geo::{Geometry};
 
-use crate::algorithms::utils::geometry_to_bbox;
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry};
-use crate::rtree::RTree;
+use super::utils::geometry_to_bbox;
+use super::super::rectangle::Rectangle;
+use super::super::node::{Node, Entry};
+use super::super::rtree::RTree;
 use geojson::Value;
 
 /// 插入操作相关算法

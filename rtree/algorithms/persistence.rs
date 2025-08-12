@@ -47,7 +47,7 @@ impl RTree {
     /// 
     /// # 示例
     /// ```
-    /// use rtree::RTree;
+    /// use geo42::rtree::RTree;
     /// 
     /// let mut rtree = RTree::new(4);
     /// // ... 插入数据 ...
@@ -101,7 +101,7 @@ impl RTree {
     
     /// # 示例
     /// ```
-    /// use rtree::RTree;
+    /// use geo42::rtree::RTree;
     /// use geo::{Point, Geometry};
     /// use tempfile::NamedTempFile;
     ///
@@ -150,7 +150,7 @@ impl RTree {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rectangle::Rectangle;
+    use crate::rtree::rectangle::Rectangle;
     use std::fs;
     use tempfile::TempDir;
 

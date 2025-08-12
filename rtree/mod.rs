@@ -3,8 +3,7 @@ pub mod node;
 pub mod rtree;
 pub mod algorithms;
 
-// 重新导出主要的公共接口
+// 重新导出主要类型
 pub use rectangle::Rectangle;
 pub use node::{Node, Entry};
-pub use rtree::RTree;
-pub use rtree::GeoItem;
+pub use rtree::{RTree, GeoItem};

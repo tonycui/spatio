@@ -1,5 +1,5 @@
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry, NodeType};
+use super::rectangle::Rectangle;
+use super::node::{Node, Entry, NodeType};
 use serde::{Deserialize, Serialize};
 use geo::Geometry;
 use std::collections::HashMap;
@@ -123,8 +123,8 @@ impl RTree {
             node.entries.iter()
                 .map(|entry| {
                     match entry {
-                        crate::node::Entry::Node { node, .. } => self.count_entries(node),
-                        crate::node::Entry::Data { .. } => 1,
+                        Entry::Node { node, .. } => self.count_entries(node),
+                        Entry::Data { .. } => 1,
                     }
                 })
                 .sum()

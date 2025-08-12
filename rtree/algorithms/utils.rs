@@ -1,5 +1,5 @@
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry};
+use super::super::rectangle::Rectangle;
+use super::super::node::{Node, Entry};
 use crate::rtree::RTree;
 // use std::result::Result;
 use std::error::Error;

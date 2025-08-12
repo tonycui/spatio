@@ -1,5 +1,5 @@
-use crate::node::{Node, Entry};
-use crate::rtree::RTree;
+use super::super::node::{Node, Entry};
+use super::super::rtree::RTree;
 
 /// R-tree调试功能实现
 impl RTree {
@@ -87,7 +87,7 @@ pub fn print_tree_structure(rtree: &RTree, depth: usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::rectangle::Rectangle;
+    use crate::rtree::rectangle::Rectangle;
 
     #[test]
     fn test_debug_functions() {

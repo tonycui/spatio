@@ -1,9 +1,9 @@
-use crate::rectangle::Rectangle;
-use crate::node::{Node, Entry};
-use crate::rtree::RTree;
+use super::super::rectangle::Rectangle;
+use super::super::node::{Node, Entry};
+use super::super::rtree::RTree;
 use geo::{Geometry, Intersects};
-use crate::rtree::GeoItem;
-use crate::algorithms::utils::geometry_to_bbox;
+use super::super::rtree::GeoItem;
+use super::utils::geometry_to_bbox;
 
 /// 搜索操作相关算法
 impl RTree {

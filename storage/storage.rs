@@ -5,8 +5,8 @@ use crate::Result;
 use geo::Geometry;
 
 // 导入 rtree 相关类型
-use rtree::RTree;
-use rtree::GeoItem;
+use crate::rtree::RTree;
+use crate::rtree::GeoItem;
 
 /// 异步地理数据库，管理多个 Collection (SharedMap架构)
 pub struct GeoDatabase {

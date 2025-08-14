@@ -1,158 +1,173 @@
-use geo::{Geometry, Point, LineString, Polygon, MultiPoint, MultiLineString, MultiPolygon, Coord};
-use geojson::{GeoJson, Value as GeoJsonValue};
-use crate::Result;
+use geo::{Geometry};
+use geojson::{GeoJson};
 
 /// 将 serde_json::Value 转换为 geo::Geometry
-pub fn geojson_to_geometry(geojson: &serde_json::Value) -> Result<Geometry<f64>> {
-    // 1. 将 serde_json::Value 转换为 geojson::GeoJson
-    let geojson_str = geojson.to_string();
-    let parsed: GeoJson = geojson_str.parse()
-        .map_err(|e| format!("Invalid GeoJSON: {}", e))?;
+// pub fn geojson_to_geometry2(geojson: &serde_json::Value) -> Result<Geometry<f64>> {
+//     // 1. 将 serde_json::Value 转换为 geojson::GeoJson
+//     let geojson_str = geojson.to_string();
+//     let parsed: GeoJson = geojson_str.parse()
+//         .map_err(|e| format!("Invalid GeoJSON: {}", e))?;
     
-    // 2. 转换为 geo::Geometry
-    match parsed {
-        GeoJson::Geometry(geom) => {
-            geometry_from_geojson_geometry(geom)
+//     // 2. 转换为 geo::Geometry
+//     match parsed {
+//         GeoJson::Geometry(geom) => {
+//             geometry_from_geojson_geometry(geom)
+//         }
+//         GeoJson::Feature(feature) => {
+//             if let Some(geom) = feature.geometry {
+//                 geometry_from_geojson_geometry(geom)
+//             } else {
+//                 Err("Feature has no geometry".into())
+//             }
+//         }
+//         _ => Err("Unsupported GeoJSON type".into()),
+//     }
+// }
+
+/// 将 GeoJSON 字符串转为 geo::Geometry<f64>
+/// 支持 GeoJSON 类型：Geometry 和 Feature
+pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f64>> {
+    // 解析 GeoJSON 字符串
+    let geojson = geojson_str.parse::<GeoJson>()?;
+
+    match geojson {
+        GeoJson::Geometry(g) => Ok(g.try_into()?),
+        GeoJson::Feature(f) => {
+            let geometry = f.geometry.ok_or("Feature 没有 geometry 字段")?;
+            Ok(geometry.try_into()?)
         }
-        GeoJson::Feature(feature) => {
-            if let Some(geom) = feature.geometry {
-                geometry_from_geojson_geometry(geom)
-            } else {
-                Err("Feature has no geometry".into())
-            }
-        }
-        _ => Err("Unsupported GeoJSON type".into()),
+        _ => Err("仅支持 GeoJSON Geometry 和 Feature 类型".into()),
     }
 }
 
-fn geometry_from_geojson_geometry(geom: geojson::Geometry) -> Result<Geometry<f64>> {
-    match geom.value {
-        GeoJsonValue::Point(coords) => {
-            if coords.len() < 2 {
-                return Err("Point coordinates must have at least 2 elements".into());
-            }
-            Ok(Geometry::Point(Point::new(coords[0], coords[1])))
-        }
-        GeoJsonValue::LineString(coords) => {
-            if coords.len() < 2 {
-                return Err("LineString must have at least 2 points".into());
-            }
-            let line: LineString<f64> = coords.into_iter()
-                .map(|coord| {
-                    if coord.len() < 2 {
-                        Coord { x: 0.0, y: 0.0 } // 默认值，实际上应该返回错误
-                    } else {
-                        Coord { x: coord[0], y: coord[1] }
-                    }
-                })
-                .collect();
-            Ok(Geometry::LineString(line))
-        }
-        GeoJsonValue::Polygon(coords) => {
-            if coords.is_empty() {
-                return Err("Polygon must have at least one ring".into());
-            }
+// fn geometry_from_geojson_geometry(geom: geojson::Geometry) -> Result<Geometry<f64>> {
+//     match geom.value {
+//         GeoJsonValue::Point(coords) => {
+//             if coords.len() < 2 {
+//                 return Err("Point coordinates must have at least 2 elements".into());
+//             }
+//             Ok(Geometry::Point(Point::new(coords[0], coords[1])))
+//         }
+//         GeoJsonValue::LineString(coords) => {
+//             if coords.len() < 2 {
+//                 return Err("LineString must have at least 2 points".into());
+//             }
+//             let line: LineString<f64> = coords.into_iter()
+//                 .map(|coord| {
+//                     if coord.len() < 2 {
+//                         Coord { x: 0.0, y: 0.0 } // 默认值，实际上应该返回错误
+//                     } else {
+//                         Coord { x: coord[0], y: coord[1] }
+//                     }
+//                 })
+//                 .collect();
+//             Ok(Geometry::LineString(line))
+//         }
+//         GeoJsonValue::Polygon(coords) => {
+//             if coords.is_empty() {
+//                 return Err("Polygon must have at least one ring".into());
+//             }
             
-            // 外环
-            let exterior: LineString<f64> = coords[0].iter()
-                .map(|coord| {
-                    if coord.len() < 2 {
-                        Coord { x: 0.0, y: 0.0 } // 默认值
-                    } else {
-                        Coord { x: coord[0], y: coord[1] }
-                    }
-                })
-                .collect();
+//             // 外环
+//             let exterior: LineString<f64> = coords[0].iter()
+//                 .map(|coord| {
+//                     if coord.len() < 2 {
+//                         Coord { x: 0.0, y: 0.0 } // 默认值
+//                     } else {
+//                         Coord { x: coord[0], y: coord[1] }
+//                     }
+//                 })
+//                 .collect();
             
-            // 内环（如果有的话）
-            let interiors: Vec<LineString<f64>> = coords[1..].iter()
-                .map(|ring| ring.iter()
-                    .map(|coord| {
-                        if coord.len() < 2 {
-                            Coord { x: 0.0, y: 0.0 } // 默认值
-                        } else {
-                            Coord { x: coord[0], y: coord[1] }
-                        }
-                    })
-                    .collect())
-                .collect();
+//             // 内环（如果有的话）
+//             let interiors: Vec<LineString<f64>> = coords[1..].iter()
+//                 .map(|ring| ring.iter()
+//                     .map(|coord| {
+//                         if coord.len() < 2 {
+//                             Coord { x: 0.0, y: 0.0 } // 默认值
+//                         } else {
+//                             Coord { x: coord[0], y: coord[1] }
+//                         }
+//                     })
+//                     .collect())
+//                 .collect();
             
-            Ok(Geometry::Polygon(Polygon::new(exterior, interiors)))
-        }
-        GeoJsonValue::MultiPoint(coords) => {
-            let points: Vec<Point<f64>> = coords.into_iter()
-                .filter_map(|coord| {
-                    if coord.len() >= 2 {
-                        Some(Point::new(coord[0], coord[1]))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            Ok(Geometry::MultiPoint(MultiPoint::new(points)))
-        }
-        GeoJsonValue::MultiLineString(coords) => {
-            let lines: Vec<LineString<f64>> = coords.into_iter()
-                .map(|line_coords| {
-                    line_coords.into_iter()
-                        .map(|coord| {
-                            if coord.len() >= 2 {
-                                Coord { x: coord[0], y: coord[1] }
-                            } else {
-                                Coord { x: 0.0, y: 0.0 }
-                            }
-                        })
-                        .collect()
-                })
-                .collect();
-            Ok(Geometry::MultiLineString(MultiLineString::new(lines)))
-        }
-        GeoJsonValue::MultiPolygon(coords) => {
-            let polygons: Vec<Polygon<f64>> = coords.into_iter()
-                .map(|poly_coords| {
-                    if poly_coords.is_empty() {
-                        // 空多边形，创建一个默认的
-                        let coords = vec![
-                            Coord { x: 0.0, y: 0.0 },
-                            Coord { x: 0.0, y: 0.0 },
-                            Coord { x: 0.0, y: 0.0 },
-                            Coord { x: 0.0, y: 0.0 }
-                        ];
-                        Polygon::new(LineString::new(coords), vec![])
-                    } else {
-                        let exterior: LineString<f64> = poly_coords[0].iter()
-                            .map(|coord| {
-                                if coord.len() >= 2 {
-                                    Coord { x: coord[0], y: coord[1] }
-                                } else {
-                                    Coord { x: 0.0, y: 0.0 }
-                                }
-                            })
-                            .collect();
+//             Ok(Geometry::Polygon(Polygon::new(exterior, interiors)))
+//         }
+//         GeoJsonValue::MultiPoint(coords) => {
+//             let points: Vec<Point<f64>> = coords.into_iter()
+//                 .filter_map(|coord| {
+//                     if coord.len() >= 2 {
+//                         Some(Point::new(coord[0], coord[1]))
+//                     } else {
+//                         None
+//                     }
+//                 })
+//                 .collect();
+//             Ok(Geometry::MultiPoint(MultiPoint::new(points)))
+//         }
+//         GeoJsonValue::MultiLineString(coords) => {
+//             let lines: Vec<LineString<f64>> = coords.into_iter()
+//                 .map(|line_coords| {
+//                     line_coords.into_iter()
+//                         .map(|coord| {
+//                             if coord.len() >= 2 {
+//                                 Coord { x: coord[0], y: coord[1] }
+//                             } else {
+//                                 Coord { x: 0.0, y: 0.0 }
+//                             }
+//                         })
+//                         .collect()
+//                 })
+//                 .collect();
+//             Ok(Geometry::MultiLineString(MultiLineString::new(lines)))
+//         }
+//         GeoJsonValue::MultiPolygon(coords) => {
+//             let polygons: Vec<Polygon<f64>> = coords.into_iter()
+//                 .map(|poly_coords| {
+//                     if poly_coords.is_empty() {
+//                         // 空多边形，创建一个默认的
+//                         let coords = vec![
+//                             Coord { x: 0.0, y: 0.0 },
+//                             Coord { x: 0.0, y: 0.0 },
+//                             Coord { x: 0.0, y: 0.0 },
+//                             Coord { x: 0.0, y: 0.0 }
+//                         ];
+//                         Polygon::new(LineString::new(coords), vec![])
+//                     } else {
+//                         let exterior: LineString<f64> = poly_coords[0].iter()
+//                             .map(|coord| {
+//                                 if coord.len() >= 2 {
+//                                     Coord { x: coord[0], y: coord[1] }
+//                                 } else {
+//                                     Coord { x: 0.0, y: 0.0 }
+//                                 }
+//                             })
+//                             .collect();
                         
-                        let interiors: Vec<LineString<f64>> = poly_coords[1..].iter()
-                            .map(|ring| ring.iter()
-                                .map(|coord| {
-                                    if coord.len() >= 2 {
-                                        Coord { x: coord[0], y: coord[1] }
-                                    } else {
-                                        Coord { x: 0.0, y: 0.0 }
-                                    }
-                                })
-                                .collect())
-                            .collect();
+//                         let interiors: Vec<LineString<f64>> = poly_coords[1..].iter()
+//                             .map(|ring| ring.iter()
+//                                 .map(|coord| {
+//                                     if coord.len() >= 2 {
+//                                         Coord { x: coord[0], y: coord[1] }
+//                                     } else {
+//                                         Coord { x: 0.0, y: 0.0 }
+//                                     }
+//                                 })
+//                                 .collect())
+//                             .collect();
                         
-                        Polygon::new(exterior, interiors)
-                    }
-                })
-                .collect();
-            Ok(Geometry::MultiPolygon(MultiPolygon::new(polygons)))
-        }
-        GeoJsonValue::GeometryCollection(_) => {
-            Err("GeometryCollection not yet supported".into())
-        }
-    }
-}
+//                         Polygon::new(exterior, interiors)
+//                     }
+//                 })
+//                 .collect();
+//             Ok(Geometry::MultiPolygon(MultiPolygon::new(polygons)))
+//         }
+//         GeoJsonValue::GeometryCollection(_) => {
+//             Err("GeometryCollection not yet supported".into())
+//         }
+//     }
+// }
 
 /// 测试两个几何体是否相交
 pub fn geometries_intersect(geom1: &Geometry<f64>, geom2: &Geometry<f64>) -> bool {
@@ -274,7 +289,7 @@ mod tests {
             "coordinates": [0.0, 0.0]
         });
         
-        let geometry = geojson_to_geometry(&point_json).unwrap();
+        let geometry = geojson_to_geometry(&point_json.to_string()).unwrap();
         match geometry {
             Geometry::Point(p) => {
                 assert_eq!(p.x(), 0.0);
@@ -291,7 +306,7 @@ mod tests {
             "coordinates": [[0.0, 0.0], [1.0, 1.0]]
         });
         
-        let geometry = geojson_to_geometry(&linestring_json).unwrap();
+        let geometry = geojson_to_geometry(&linestring_json.to_string()).unwrap();
         match geometry {
             Geometry::LineString(line) => {
                 assert_eq!(line.0.len(), 2);
@@ -313,7 +328,7 @@ mod tests {
             ]]
         });
         
-        let geometry = geojson_to_geometry(&polygon_json).unwrap();
+        let geometry = geojson_to_geometry(&polygon_json.to_string()).unwrap();
         match geometry {
             Geometry::Polygon(poly) => {
                 assert_eq!(poly.exterior().0.len(), 5);
@@ -340,8 +355,8 @@ mod tests {
             ]]
         });
         
-        let point_geom = geojson_to_geometry(&point_json).unwrap();
-        let polygon_geom = geojson_to_geometry(&polygon_json).unwrap();
+        let point_geom = geojson_to_geometry(&point_json.to_string()).unwrap();
+        let polygon_geom = geojson_to_geometry(&polygon_json.to_string()).unwrap();
         
         assert!(geometries_intersect(&point_geom, &polygon_geom));
     }
@@ -364,8 +379,8 @@ mod tests {
             ]]
         });
         
-        let point_geom = geojson_to_geometry(&point_json).unwrap();
-        let polygon_geom = geojson_to_geometry(&polygon_json).unwrap();
+        let point_geom = geojson_to_geometry(&point_json.to_string()).unwrap();
+        let polygon_geom = geojson_to_geometry(&polygon_json.to_string()).unwrap();
         
         assert!(!geometries_intersect(&point_geom, &polygon_geom));
     }
@@ -377,7 +392,7 @@ mod tests {
             "coordinates": [0.0] // 缺少 y 坐标
         });
         
-        let result = geojson_to_geometry(&invalid_json);
+        let result = geojson_to_geometry(&invalid_json.to_string());
         assert!(result.is_err());
     }
 

@@ -52,11 +52,14 @@ impl<'a> ArgumentParser<'a> {
         let geojson_str = self.get_string(index, "GeoJSON")?;
         
         // 解析为 JSON
-        let geojson_value: serde_json::Value = serde_json::from_str(geojson_str)
-            .map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
+        // let geojson_value: serde_json::Value = serde_json::from_str(geojson_str)
+        //     .map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
         
-        // 直接转换为 geo::Geometry
-        geojson_to_geometry(&geojson_value)
+        // // 直接转换为 geo::Geometry
+        // geojson_to_geometry(&geojson_value)
+        //     .map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
+
+            geojson_to_geometry(&geojson_str)
             .map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
     }
 
@@ -79,12 +82,12 @@ impl<'a> ArgumentParser<'a> {
         
         let collection_id = self.get_string(0, "collection ID")?;
         let item_id = self.get_string(1, "item ID")?;
-        let geometry = self.get_geometry(2)?;
+        let geojson = self.get_string(2, "GeoJSON")?;
         
         Ok(SetArgs {
             collection_id: collection_id.to_string(),
             item_id: item_id.to_string(),
-            geometry,
+            geojson: geojson.to_string(),
         })
     }
 
@@ -142,7 +145,7 @@ impl<'a> ArgumentParser<'a> {
 pub struct SetArgs {
     pub collection_id: String,
     pub item_id: String,
-    pub geometry: Geometry,
+    pub geojson: String,
 }
 
 /// GET 命令的解析结果
@@ -180,11 +183,10 @@ mod tests {
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
         assert_eq!(parsed.item_id, "truck1");
-        // 验证 geometry 而不是 geojson
-        match parsed.geometry {
-            Geometry::Point(_) => {},
-            _ => panic!("Expected Point geometry"),
-        }
+        // 验证 geojson 字符串而不是 geometry
+        assert!(parsed.geojson.contains("Point"));
+        assert!(parsed.geojson.contains("1.0"));
+        assert!(parsed.geojson.contains("2.0"));
     }
 
     #[test]
@@ -227,7 +229,133 @@ mod tests {
         let parser = ArgumentParser::new(&args, "SET");
         let result = parser.parse_set_args();
         
+        // 现在 parse_set_args 只获取字符串，不验证 GeoJSON 格式
+        // 验证会在后续的存储过程中进行
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.geojson, "invalid json");
+    }
+
+    #[test]
+    fn test_get_geometry_point() {
+        let args = vec![
+            RespValue::BulkString(Some(json!({"type": "Point", "coordinates": [10.5, 20.7]}).to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
+        assert!(result.is_ok());
+        let geometry = result.unwrap();
+        match geometry {
+            Geometry::Point(point) => {
+                assert_eq!(point.x(), 10.5);
+                assert_eq!(point.y(), 20.7);
+            }
+            _ => panic!("Expected Point geometry"),
+        }
+    }
+
+    #[test]
+    fn test_get_geometry_polygon() {
+        let polygon_geojson = json!({
+            "type": "Polygon",
+            "coordinates": [[
+                [0.0, 0.0],
+                [1.0, 0.0],
+                [1.0, 1.0],
+                [0.0, 1.0],
+                [0.0, 0.0]
+            ]]
+        });
+        
+        let args = vec![
+            RespValue::BulkString(Some(polygon_geojson.to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
+        assert!(result.is_ok());
+        let geometry = result.unwrap();
+        match geometry {
+            Geometry::Polygon(polygon) => {
+                assert_eq!(polygon.exterior().coords().count(), 5); // 包括闭合点
+            }
+            _ => panic!("Expected Polygon geometry"),
+        }
+    }
+
+    #[test]
+    fn test_get_geometry_feature() {
+        let feature_geojson = json!({
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [5.5, 15.3]
+            },
+            "properties": {
+                "name": "test point"
+            }
+        });
+        
+        let args = vec![
+            RespValue::BulkString(Some(feature_geojson.to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
+        assert!(result.is_ok());
+        let geometry = result.unwrap();
+        match geometry {
+            Geometry::Point(point) => {
+                assert_eq!(point.x(), 5.5);
+                assert_eq!(point.y(), 15.3);
+            }
+            _ => panic!("Expected Point geometry"),
+        }
+    }
+
+    #[test]
+    fn test_get_geometry_invalid_json() {
+        let args = vec![
+            RespValue::BulkString(Some("invalid json string".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("invalid GeoJSON"));
+        assert!(result.unwrap_err().contains("invalid GeoJSON geometry"));
+    }
+
+    #[test]
+    fn test_get_geometry_missing_parameter() {
+        let args = vec![];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("missing GeoJSON parameter"));
+    }
+
+    #[test]
+    fn test_get_geometry_invalid_geometry_type() {
+        let invalid_geojson = json!({
+            "type": "InvalidType",
+            "coordinates": [1.0, 2.0]
+        });
+        
+        let args = vec![
+            RespValue::BulkString(Some(invalid_geojson.to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "TEST");
+        let result = parser.get_geometry(0);
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid GeoJSON geometry"));
     }
 }

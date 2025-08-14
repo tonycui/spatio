@@ -1,16 +1,22 @@
-use geo::{Geometry};
+use crate::storage::geometry_utils::{geojson_to_geometry};
 
 use super::utils::geometry_to_bbox;
 use super::super::rectangle::Rectangle;
 use super::super::node::{Node, Entry};
 use super::super::rtree::RTree;
-use geojson::Value;
+// use geojson::Value;
 
 /// 插入操作相关算法
 impl RTree {
     /// 插入新的数据条目 - 遵循论文Algorithm Insert
-    pub fn insert_geometry(&mut self, data: String, geometry: Geometry) {
+    pub fn insert_geojson(&mut self, data: String, geojson_str: &str) {
+        println!("🔍 insert_geojson called with data: {}, geojson_str: {}", data, geojson_str);
         
+        if self.geometry_map.contains_key(&data) || self.geojson_map.contains_key(&data) {
+            self.delete(&data);
+        }
+        let geometry = geojson_to_geometry(geojson_str).unwrap();
+
         let rect;
         match geometry_to_bbox(&geometry) {
             Ok(bbox) => rect = bbox,
@@ -21,12 +27,34 @@ impl RTree {
         }
 
         self.insert(rect, data.clone());
-        // 将几何体转换为GeoJSON格式并存储
-        let geojson_value: Value = Value::from(&geometry);
         self.geometry_map.insert(data.clone(), geometry);
-        self.geojson_map.insert(data.clone(), geojson_value.to_string());
+        self.geojson_map.insert(data.clone(), geojson_str.to_string());
 
+        println!("🔍 Stored in geojson_map: {}", self.geojson_map.get(&data).unwrap());
     }
+
+    // /// 插入新的数据条目 - 遵循论文Algorithm Insert
+    // pub fn insert_geometry(&mut self, data: String, geometry: Geometry) {
+    //     if self.geometry_map.contains_key(&data) || self.geojson_map.contains_key(&data) {
+    //         self.delete(&data);
+    //     }
+
+    //     let rect;
+    //     match geometry_to_bbox(&geometry) {
+    //         Ok(bbox) => rect = bbox,
+    //         Err(e) => {
+    //             eprintln!("Error calculating bounding box: {}", e);
+    //             return;
+    //         }
+    //     }
+
+    //     self.insert(rect, data.clone());
+    //     // 将几何体转换为GeoJSON格式并存储
+    //     let geojson_value: Value = Value::from(&geometry);
+    //     self.geometry_map.insert(data.clone(), geometry);
+    //     self.geojson_map.insert(data.clone(), geojson_value.to_string());
+
+    // }
     /// 插入新的数据条目 - 遵循论文Algorithm Insert
     pub fn insert(&mut self, rect: Rectangle, data: String) {
         // I1: 如果根节点不存在，创建根节点
@@ -110,6 +138,8 @@ impl RTree {
 mod tests {
     use super::*;
     use geo::{Point, Polygon, Coord};
+    use geo::{Geometry};
+    use crate::storage::geometry_utils::{geometry_to_geojson};
 
     #[test]
     fn test_insert_basic() {
@@ -136,8 +166,8 @@ mod tests {
         let data_id = "42";
         
         // 插入几何体 - 不再需要手动传递 rect
-        rtree.insert_geometry(data_id.to_string(), point.clone());
-        
+        rtree.insert_geojson(data_id.to_string(), &geometry_to_geojson(&point).to_string());
+
         // 验证空间索引中包含该数据
         assert_eq!(rtree.len(), 1);
         
@@ -176,8 +206,8 @@ mod tests {
         let data_id = "123".to_string();
         
         // 插入几何体 - 不再需要手动传递 rect
-        rtree.insert_geometry(data_id.clone(), polygon.clone());
-        
+        rtree.insert_geojson(data_id.clone(), &geometry_to_geojson(&polygon).to_string());
+
         // 验证空间索引中包含该数据
         assert_eq!(rtree.len(), 1);
         
@@ -203,7 +233,7 @@ mod tests {
         
         // 插入多个不同类型的几何体
         let point = Geometry::Point(Point::new(1.0, 1.0));
-        rtree.insert_geometry("1".to_string(), point);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point).to_string());
 
         let coords = vec![
             Coord { x: 5.0, y: 5.0 },
@@ -213,8 +243,8 @@ mod tests {
             Coord { x: 5.0, y: 5.0 },
         ];
         let polygon = Geometry::Polygon(Polygon::new(coords.into(), vec![]));
-        rtree.insert_geometry("2".to_string(), polygon);
-        
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&polygon).to_string());
+
         // 验证两个几何体都被正确存储
         assert_eq!(rtree.len(), 2);
         assert_eq!(rtree.geometry_map.len(), 2);
@@ -245,7 +275,7 @@ mod tests {
         let data_id = "999".to_string();
 
         let initial_len = rtree.len();
-        rtree.insert_geometry(data_id.clone(), point);
+        rtree.insert_geojson(data_id.clone(), &geometry_to_geojson(&point).to_string());
 
         // 验证空间索引被更新（len 增加）
         assert_eq!(rtree.len(), initial_len + 1);
@@ -275,7 +305,7 @@ mod tests {
         let polygon = Geometry::Polygon(Polygon::new(coords.into(), vec![]));
         let data_id = "555".to_string();
 
-        rtree.insert_geometry(data_id.clone(), polygon);
+        rtree.insert_geojson(data_id.clone(), &geometry_to_geojson(&polygon).to_string());
 
         // 验证能够通过计算出的边界框范围进行空间查询
         let search_rect = Rectangle::new(0.5, 0.5, 5.5, 4.5); // 包含整个多边形
@@ -330,5 +360,66 @@ mod tests {
         
         // 应该选择第一个条目，因为它与测试矩形重叠
         assert_eq!(best_index, 0);
+    }
+
+    #[test]
+    fn test_insert_same_id_overwrites() {
+        let mut rtree = RTree::new(4);
+        
+        // 第一次插入
+        let point1 = Geometry::Point(Point::new(1.0, 2.0));
+        let data_id = "duplicate_id".to_string();
+
+        rtree.insert_geojson(data_id.clone(), &geometry_to_geojson(&point1).to_string());
+
+        // 验证第一次插入成功
+        assert_eq!(rtree.len(), 1);
+        assert_eq!(rtree.geometry_map.len(), 1);
+        assert_eq!(rtree.geojson_map.len(), 1);
+        
+        // 验证第一次插入的数据
+        let stored_geometry1 = rtree.geometry_map.get(&data_id).unwrap();
+        match stored_geometry1 {
+            Geometry::Point(p) => {
+                assert_eq!(p.x(), 1.0);
+                assert_eq!(p.y(), 2.0);
+            }
+            _ => panic!("Expected Point geometry"),
+        }
+        
+        // 第二次插入相同的ID，但不同的几何体
+        let point2 = Geometry::Point(Point::new(10.0, 20.0));
+        rtree.insert_geojson(data_id.clone(), &geometry_to_geojson(&point2).to_string());
+
+        // 验证总数量仍然是1（覆盖而不是添加）
+        assert_eq!(rtree.len(), 1);
+        assert_eq!(rtree.geometry_map.len(), 1);
+        assert_eq!(rtree.geojson_map.len(), 1);
+        
+        // 验证获取到的是最后一次插入的数据
+        let stored_geometry2 = rtree.geometry_map.get(&data_id).unwrap();
+        match stored_geometry2 {
+            Geometry::Point(p) => {
+                assert_eq!(p.x(), 10.0);  // 应该是新的坐标
+                assert_eq!(p.y(), 20.0);  // 应该是新的坐标
+            }
+            _ => panic!("Expected Point geometry"),
+        }
+        
+        // 验证GeoJSON也被正确更新
+        let geojson_str = rtree.geojson_map.get(&data_id).unwrap();
+        assert!(geojson_str.contains("10"));
+        assert!(geojson_str.contains("20"));
+        assert!(!geojson_str.contains("\"1\""));  // 不应该包含旧坐标
+        assert!(!geojson_str.contains("\"2\""));  // 不应该包含旧坐标
+        
+        // 验证空间查询只能找到新位置的数据
+        let old_search_rect = Rectangle::new(0.5, 1.5, 1.5, 2.5);  // 旧位置附近
+        let old_results = rtree.search_bbox(&old_search_rect);
+        assert!(!old_results.contains(&data_id));  // 不应该在旧位置找到
+        
+        let new_search_rect = Rectangle::new(9.5, 19.5, 10.5, 20.5);  // 新位置附近
+        let new_results = rtree.search_bbox(&new_search_rect);
+        assert!(new_results.contains(&data_id));  // 应该在新位置找到
     }
 }

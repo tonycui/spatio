@@ -5,6 +5,9 @@ use geo::Geometry;
 use std::collections::HashMap;
 use derive_more::Display;
 
+#[cfg(test)]
+use crate::storage::geometry_utils::geometry_to_geojson;
+
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
 #[display(fmt = "GeoItem {{ id: {}, geometry: {:?}, geojson: {} }}", id, geometry, geojson)]
 pub struct GeoItem {
@@ -283,9 +286,9 @@ mod tests {
             vec![]
         ));
 
-        rtree.insert_geometry("1".to_string(), rect1);
-        rtree.insert_geometry("2".to_string(), rect2);
-        rtree.insert_geometry("3".to_string(), rect3);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&rect1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&rect2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&rect3).to_string());
 
         // 搜索相交的矩形
         let query_geom = Geometry::Polygon(Polygon::new(
@@ -332,7 +335,7 @@ mod tests {
             let x = i as f64 * 2.0;
             let y = i as f64 * 2.0;
             let point = Geometry::Point(Point::new(x, y));
-            rtree.insert_geometry(i.to_string(), point);
+            rtree.insert_geojson(i.to_string(), &geometry_to_geojson(&point).to_string());
             println!("Inserted {}: current len = {}, depth = {}", i, rtree.len(), rtree.depth());
         }
         

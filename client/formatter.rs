@@ -32,7 +32,7 @@ impl OutputFormatter {
                 if s.is_empty() {
                     "(empty string)".yellow().to_string()
                 } else {
-                    format!("\"{}\"", s)
+                    s.clone()
                 }
             },
             None => "(nil)".red().to_string(),
@@ -48,7 +48,7 @@ impl OutputFormatter {
                     let mut result = String::new();
                     for (i, value) in values.iter().enumerate() {
                         let formatted_value = match value {
-                            RespValue::BulkString(Some(s)) => format!("\"{}\"", s),
+                            RespValue::BulkString(Some(s)) => s.clone(),
                             RespValue::BulkString(None) => "(nil)".to_string(),
                             RespValue::Integer(n) => n.to_string(),
                             RespValue::SimpleString(s) => s.clone(),

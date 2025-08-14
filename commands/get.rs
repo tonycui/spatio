@@ -61,12 +61,8 @@ mod tests {
             "coordinates": [-122.4194, 37.7749]
         });
 
-        // 转换为 geo::Geometry
-        use crate::storage::geometry_utils::geojson_to_geometry;
-        let geometry = geojson_to_geometry(&point_json).unwrap();
-        
         // 先存储数据
-        database.set("fleet", "truck1", geometry).await.unwrap();
+        database.set("fleet", "truck1", &point_json.to_string()).await.unwrap();
 
         let cmd = GetCommand::new(Arc::clone(&database));
 

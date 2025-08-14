@@ -106,7 +106,8 @@ fn run_interactive_mode(connection: &mut ClientConnection, host: &str, port: u16
                     }
                     _ => {
                         // 执行普通命令
-                        match connection.send_command(&parts) {
+                        match connection.send_command(
+                            &parts) {
                             Ok(response) => {
                                 println!("{}", OutputFormatter::format_response(&response));
                             }

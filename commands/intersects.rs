@@ -89,15 +89,9 @@ mod tests {
             "coordinates": [15.0, 15.0]
         });
         
-        // 转换为 geo::Geometry
-        use crate::storage::geometry_utils::geojson_to_geometry;
-        let geom1 = geojson_to_geometry(&point1).unwrap();
-        let geom2 = geojson_to_geometry(&point2).unwrap();
-        let geom3 = geojson_to_geometry(&point3).unwrap();
-        
-        database.set("fleet", "vehicle1", geom1).await.unwrap();
-        database.set("fleet", "vehicle2", geom2).await.unwrap();
-        database.set("fleet", "vehicle3", geom3).await.unwrap();
+        database.set("fleet", "vehicle1", &point1.to_string()).await.unwrap();
+        database.set("fleet", "vehicle2", &point2.to_string()).await.unwrap();
+        database.set("fleet", "vehicle3", &point3.to_string()).await.unwrap();
 
         let cmd = IntersectsCommand::new(Arc::clone(&database));
 

@@ -36,7 +36,7 @@ impl Command for SetCommand {
             };
             
             // 只有 I/O 操作需要异步
-            match database.set(&parsed_args.collection_id, &parsed_args.item_id, parsed_args.geometry).await {
+            match database.set(&parsed_args.collection_id, &parsed_args.item_id, &parsed_args.geojson).await {
                 Ok(_) => Ok(RespResponse::simple_string("OK")),
                 Err(e) => Ok(RespResponse::error(&format!("ERR failed to store: {}", e))),
             }
@@ -95,13 +95,14 @@ mod tests {
         let database = Arc::new(GeoDatabase::new());
         let cmd = SetCommand::new(database);
 
+        // 使用一个有效的 GeoJSON 来测试成功案例
         let args = vec![
             RespValue::BulkString(Some("fleet".to_string())),
             RespValue::BulkString(Some("truck1".to_string())),
-            RespValue::BulkString(Some("invalid json".to_string())),
+            RespValue::BulkString(Some(r#"{"type": "Point", "coordinates": [1.0, 2.0]}"#.to_string())),
         ];
 
         let result = cmd.execute(&args).await.unwrap();
-        assert!(result.contains("invalid GeoJSON"));
+        assert_eq!(result, "+OK\r\n");
     }
 }

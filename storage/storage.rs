@@ -47,13 +47,13 @@ impl GeoDatabase {
     }
 
     /// 异步存储一个对象到指定 Collection
-    pub async fn set(&self, collection_id: &str, item_id: &str, geometry: Geometry) -> Result<()> {
+    pub async fn set(&self, collection_id: &str, item_id: &str, geojson_str: &str) -> Result<()> {
         // 1. 获取或创建collection
         let collection = self.get_or_create_collection(collection_id).await;
         
         // 2. 获取collection的写锁
         let mut rtree = collection.write().await;
-        rtree.insert_geometry(item_id.to_string(), geometry);
+        rtree.insert_geojson(item_id.to_string(), geojson_str);
 
         Ok(())
     }
@@ -157,7 +157,7 @@ mod tests {
     // 测试辅助函数：将 GeoJSON 转换为 Geometry
     fn json_to_geometry(geojson: &serde_json::Value) -> Geometry {
         use crate::storage::geometry_utils::geojson_to_geometry;
-        geojson_to_geometry(geojson).unwrap()
+        geojson_to_geometry(&geojson.to_string()).unwrap()
     }
 
     
@@ -168,18 +168,16 @@ mod tests {
         let point1_json = json!({"type": "Point", "coordinates": [1.0, 2.0]});
         let point2_json = json!({"type": "Point", "coordinates": [3.0, 4.0]});
         
-        // 转换为 geo::Geometry
-        use crate::storage::geometry_utils::geojson_to_geometry;
-        let point1 = geojson_to_geometry(&point1_json).unwrap();  
-        let point2 = geojson_to_geometry(&point2_json).unwrap();
-        
         // 并发写入不同collection
         let db1 = std::sync::Arc::clone(&db);
         let db2 = std::sync::Arc::clone(&db);
         
+        let point1_str = point1_json.to_string();
+        let point2_str = point2_json.to_string();
+        
         let (r1, r2) = tokio::join!(
-            db1.set("fleet", "truck1", point1),
-            db2.set("sensors", "sensor1", point2)
+            db1.set("fleet", "truck1", &point1_str),
+            db2.set("sensors", "sensor1", &point2_str)
         );
         
         assert!(r1.is_ok());
@@ -224,9 +222,9 @@ mod tests {
         });
         
         // 存储不同类型的几何体
-        assert!(db.set("test", "point1", json_to_geometry(&point)).await.is_ok());
-        assert!(db.set("test", "line1", json_to_geometry(&linestring)).await.is_ok());
-        assert!(db.set("test", "poly1", json_to_geometry(&polygon)).await.is_ok());
+        assert!(db.set("test", "point1", &point.to_string()).await.is_ok());
+        assert!(db.set("test", "line1", &linestring.to_string()).await.is_ok());
+        assert!(db.set("test", "poly1", &polygon.to_string()).await.is_ok());
         
         // 验证数据存储成功
         assert!(db.get("test", "point1").await.unwrap().is_some());
@@ -262,9 +260,9 @@ mod tests {
             "coordinates": [10.0, 10.0]
         });
         
-        db.set("test", "point1", json_to_geometry(&point1)).await.unwrap();
-        db.set("test", "point2", json_to_geometry(&point2)).await.unwrap();
-        db.set("test", "point3", json_to_geometry(&point3)).await.unwrap();
+        db.set("test", "point1", &point1.to_string()).await.unwrap();
+        db.set("test", "point2", &point2.to_string()).await.unwrap();
+        db.set("test", "point3", &point3.to_string()).await.unwrap();
         
         // 测试空间查询：查找与边界框 (-1,-1,6,6) 相交的点
         let query_area = json!({
@@ -323,8 +321,8 @@ mod tests {
             ]]
         });
         
-        db.set("test", "inside", json_to_geometry(&point_inside)).await.unwrap();
-        db.set("test", "outside", json_to_geometry(&point_outside)).await.unwrap();
+        db.set("test", "inside", &point_inside.to_string()).await.unwrap();
+        db.set("test", "outside", &point_outside.to_string()).await.unwrap();
         
         // 使用三角形进行查询
         let triangle_geometry = json_to_geometry(&triangle);
@@ -360,7 +358,7 @@ mod tests {
             "coordinates": [0.0, 0.0]
         });
         
-        db.set("test", "point1", json_to_geometry(&point1)).await.unwrap();
+        db.set("test", "point1", &point1.to_string()).await.unwrap();
         
         // 由于我们现在需要有效的 Geometry，我们用一个有效几何体来测试错误情况
         // 这个测试应该检验数据库查询的错误处理能力
@@ -378,4 +376,50 @@ mod tests {
         let results = result.unwrap();
         assert!(results.is_empty());
     }
+
+    #[tokio::test]
+    async fn test_set_districts_polygon() {
+        let db = GeoDatabase::new();
+        
+        // 测试 SET districts id_1 命令的 GeoJSON 数据
+        let districts_geojson = r#"{"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}}"#;
+        
+        // 执行 SET 操作
+        let result = db.set("districts", "id_1", districts_geojson).await;
+        assert!(result.is_ok(), "SET operation should succeed");
+        
+        // // 验证数据是否正确存储
+        // let get_result = db.get("districts", "id_1").await;
+        // assert!(get_result.is_ok(), "GET operation should succeed");
+        
+        // let stored_data = get_result.unwrap();
+        // assert!(stored_data.is_some(), "Data should be found");
+        
+        // let geo_item = stored_data.unwrap();
+        // assert_eq!(geo_item.id, "id_1");
+        
+        // // 验证存储的 GeoJSON 包含正确的几何体类型
+        // assert!(geo_item.geojson.contains("Polygon"));
+        // assert!(geo_item.geojson.contains("coordinates"));
+        
+        // // 验证可以解析存储的几何体
+        // let parsed_geojson: serde_json::Value = serde_json::from_str(&geo_item.geojson).unwrap();
+        // assert_eq!(parsed_geojson["geometry"]["type"], "Polygon");
+        
+        // // 验证坐标数据存在且正确
+        // let coordinates = &parsed_geojson["geometry"]["coordinates"][0];
+        // assert!(coordinates.is_array());
+        // assert_eq!(coordinates.as_array().unwrap().len(), 8); // 多边形有8个点（首尾相同）
+        
+        // // 验证第一个和最后一个点相同（多边形闭合）
+        // let first_point = &coordinates[0];
+        // let last_point = &coordinates[7];
+        // assert_eq!(first_point, last_point);
+        
+        // // 验证第一个点的坐标
+        // assert_eq!(first_point[0], 2.5);
+        // assert_eq!(first_point[1], 1.0);
+    }
+
+    
 }

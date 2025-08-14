@@ -341,6 +341,8 @@ impl RTree {
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::geometry_utils::geometry_to_geojson;
+
     use super::*;
     use geo::{Point, Polygon, Coord};
 
@@ -353,11 +355,11 @@ mod tests {
         let point1 = geo::Geometry::Point(Point::new(1.0, 1.0));
         let point2 = geo::Geometry::Point(Point::new(5.0, 5.0));
         let point3 = geo::Geometry::Point(Point::new(10.0, 10.0));
-        
-        rtree.insert_geometry("1".to_string(), point1);
-        rtree.insert_geometry("2".to_string(), point2);
-        rtree.insert_geometry("3".to_string(), point3);
-        
+
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&point2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&point3).to_string());
+
         // 验证初始状态
         assert_eq!(rtree.len(), 3);
         assert_eq!(rtree.geometry_map.len(), 3);
@@ -390,8 +392,8 @@ mod tests {
         
         // 插入一个几何体
         let point = geo::Geometry::Point(Point::new(1.0, 1.0));
-        rtree.insert_geometry("1".to_string(), point);
-        
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point).to_string());
+
         // 验证初始状态
         assert_eq!(rtree.len(), 1);
         assert_eq!(rtree.geometry_map.len(), 1);
@@ -424,7 +426,7 @@ mod tests {
         // 插入多个几何体
         for i in 1..=5 {
             let point = geo::Geometry::Point(Point::new(i as f64, i as f64));
-            rtree.insert_geometry(i.to_string(), point);
+            rtree.insert_geojson(i.to_string(), &geometry_to_geojson(&point).to_string());
         }
         
         // 验证初始状态
@@ -473,7 +475,7 @@ mod tests {
         ];
         
         for (id, geom) in &geometries {
-            rtree.insert_geometry(id.to_string(), geom.clone());
+            rtree.insert_geojson(id.to_string(), &geometry_to_geojson(geom).to_string());
         }
         
         // 验证初始状态
@@ -501,8 +503,8 @@ mod tests {
         
         // 插入不同类型的几何体
         let point = geo::Geometry::Point(Point::new(1.0, 1.0));
-        rtree.insert_geometry("1".to_string(), point);
-        
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point).to_string());
+
         let coords = vec![
             Coord { x: 5.0, y: 5.0 },
             Coord { x: 8.0, y: 5.0 },
@@ -511,8 +513,8 @@ mod tests {
             Coord { x: 5.0, y: 5.0 },
         ];
         let polygon = geo::Geometry::Polygon(Polygon::new(coords.into(), vec![]));
-        rtree.insert_geometry("2".to_string(), polygon);
-        
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&polygon).to_string());
+
         // 验证插入成功
         assert_eq!(rtree.len(), 2);
         assert_eq!(rtree.geometry_map.len(), 2);
@@ -544,7 +546,7 @@ mod tests {
         // 但我们测试函数的错误处理路径
         
         let point = geo::Geometry::Point(Point::new(1.0, 1.0));
-        rtree.insert_geometry("1".to_string(), point);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point).to_string());
 
         // 验证初始状态
         assert_eq!(rtree.len(), 1);
@@ -578,9 +580,9 @@ mod tests {
         let point2 = geo::Geometry::Point(Point::new(10.0, 10.0));
         let point3 = geo::Geometry::Point(Point::new(25.0, 25.0));
 
-        rtree.insert_geometry("1".to_string(), point1);
-        rtree.insert_geometry("2".to_string(), point2);
-        rtree.insert_geometry("3".to_string(), point3);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&point2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&point3).to_string());
 
         // 删除一个条目
         let deleted = rtree.delete("2");
@@ -610,10 +612,10 @@ mod tests {
         let point3 = geo::Geometry::Point(Point::new(4.5, 4.5));
         let point4 = geo::Geometry::Point(Point::new(6.5, 6.5));
 
-        rtree.insert_geometry("1".to_string(), point1);
-        rtree.insert_geometry("2".to_string(), point2);
-        rtree.insert_geometry("3".to_string(), point3);
-        rtree.insert_geometry("4".to_string(), point4);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&point2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&point3).to_string());
+        rtree.insert_geojson("4".to_string(), &geometry_to_geojson(&point4).to_string());
 
         // 验证初始状态
         assert_eq!(rtree.len(), 4);
@@ -651,7 +653,7 @@ mod tests {
         for i in 0..10 {
             let x = (i as f64) * 2.0;
             let point = geo::Geometry::Point(Point::new(x + 0.5, 0.5));
-            rtree.insert_geometry(i.to_string(), point);
+            rtree.insert_geojson(i.to_string(), &geometry_to_geojson(&point).to_string());
         }
         
         println!("Initial tree structure:");
@@ -699,7 +701,7 @@ mod tests {
         ];
         
         for (id, geom) in &geometries {
-            rtree.insert_geometry(id.to_string(), geom.clone());
+            rtree.insert_geojson(id.to_string(), &geometry_to_geojson(geom).to_string());
         }
         
         let initial_len = rtree.len();
@@ -737,7 +739,7 @@ mod tests {
         ];
         
         for (id, geom) in &geometries {
-            rtree.insert_geometry(id.to_string(), geom.clone());
+            rtree.insert_geojson(id.to_string(), &geometry_to_geojson(geom).to_string());
         }
         
         // 验证插入后所有条目都存在
@@ -781,7 +783,7 @@ mod tests {
         ];
         
         for (id, geom) in &geometries {
-            rtree.insert_geometry(id.to_string(), geom.clone());
+            rtree.insert_geojson(id.to_string(), &geometry_to_geojson(geom).to_string());
         }
         
         // 记录插入前每个条目的搜索结果
@@ -830,7 +832,7 @@ mod tests {
         ];
         
         for (id, geom) in &geometries {
-            rtree.insert_geometry(id.to_string(), geom.clone());
+            rtree.insert_geojson(id.to_string(), &geometry_to_geojson(geom).to_string());
         }
         
         // 删除一个条目，验证简化的下溢处理正确工作
@@ -860,8 +862,8 @@ mod tests {
         let point1 = geo::Geometry::Point(Point::new(0.5, 0.5));
         let point2 = geo::Geometry::Point(Point::new(2.5, 0.5));
 
-        rtree.insert_geometry("1".to_string(), point1);
-        rtree.insert_geometry("2".to_string(), point2);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&point2).to_string());
 
         // 删除一个条目
         let deleted = rtree.delete("1");

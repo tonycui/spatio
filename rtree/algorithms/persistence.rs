@@ -98,26 +98,8 @@ impl RTree {
         
         Ok(())
     }
-    
-    /// # 示例
-    /// ```
-    /// use spatio::rtree::RTree;
-    /// use geo::{Point, Geometry};
-    /// use tempfile::NamedTempFile;
-    ///
-    /// // 创建临时文件
-    /// let temp_file = NamedTempFile::new().unwrap();
-    /// let temp_path = temp_file.path();
-    ///
-    /// // 创建并保存R-tree
-    /// let mut rtree = RTree::new(4);
-    /// rtree.insert_geometry("1".to_string(), Geometry::Point(Point::new(0.5, 0.5)));
-    /// rtree.dump_to_file(&temp_path).unwrap();
-    ///
-    /// // 从文件加载
-    /// let loaded_rtree = RTree::load_from_file(&temp_path).unwrap();
-    /// assert_eq!(rtree.len(), loaded_rtree.len());
-    /// ```
+
+    /// 从文件加载R-tree
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<RTree, PersistenceError> {
         let format = SerializationFormat::from_extension(&path);
         Self::load_from_file_with_format(path, format)

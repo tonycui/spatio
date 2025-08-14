@@ -5,6 +5,9 @@ use geo::{Geometry, Intersects};
 use super::super::rtree::GeoItem;
 use super::utils::geometry_to_bbox;
 
+#[cfg(test)]
+use crate::storage::geometry_utils::geometry_to_geojson;
+
 /// 搜索操作相关算法
 impl RTree {
     /// 搜索与查询矩形相交的所有条目 - 遵循论文Algorithm Search
@@ -100,9 +103,9 @@ mod tests {
         let point2 = Geometry::Point(Point::new(10.0, 10.0));
         let point3 = Geometry::Point(Point::new(25.0, 25.0));
         
-        rtree.insert_geometry("1".to_string(), point1.clone());
-        rtree.insert_geometry("2".to_string(), point2.clone());
-        rtree.insert_geometry("3".to_string(), point3.clone());
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&point1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&point2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&point3).to_string());
         
         // 创建查询几何体 - 一个包含点1和点2的多边形
         let query_polygon = Geometry::Polygon(Polygon::new(
@@ -134,7 +137,7 @@ fn test_search_with_limit() {
     // 插入5个点，都在查询范围内
     for i in 1..=5 {
         let point = Geometry::Point(Point::new(i as f64, i as f64));
-        rtree.insert_geometry(i.to_string(), point);
+        rtree.insert_geojson(i.to_string(), &geometry_to_geojson(&point).to_string());
     }
     
     // 创建一个包含所有点的查询几何体
@@ -173,7 +176,7 @@ fn test_search_limit_early_termination() {
     // 插入10个点
     for i in 1..=10 {
         let point = Geometry::Point(Point::new(i as f64, i as f64));
-        rtree.insert_geometry(format!("item_{}", i), point);
+        rtree.insert_geojson(format!("item_{}", i), &geometry_to_geojson(&point).to_string());
     }
     
     // 创建查询几何体覆盖所有点
@@ -238,9 +241,9 @@ fn test_search_limit_early_termination() {
             vec![]
         ));
         
-        rtree.insert_geometry("1".to_string(), poly1);
-        rtree.insert_geometry("2".to_string(), poly2);
-        rtree.insert_geometry("3".to_string(), poly3);
+        rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&poly1).to_string());
+        rtree.insert_geojson("2".to_string(), &geometry_to_geojson(&poly2).to_string());
+        rtree.insert_geojson("3".to_string(), &geometry_to_geojson(&poly3).to_string());
         
         // 查询多边形：与poly1和poly2相交，但与poly3不相交
         let query_poly = Geometry::Polygon(Polygon::new(

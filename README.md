@@ -152,12 +152,6 @@ Check our detailed [Roadmap](ROADMAP.md) for project plans and progress.
 - ✅ Spatial query commands
 
 
-## 📚 Documentation
-
-- [API Documentation](docs/api.md)
-- [Configuration Guide](docs/configuration.md)
-- [Deployment Guide](docs/deployment.md)
-- [Development Guide](docs/development.md)
 
 ## 🧪 Testing
 

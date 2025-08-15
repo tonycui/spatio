@@ -114,17 +114,6 @@ Spatio is a high-performance geospatial database developed in Rust, designed for
 - [ ] Service mesh integration
 - [ ] Cloud storage backend support
 
-## 🏆 Competitive Advantages
-
-### Advantages over Tile38
-
-| Feature | Tile38 | Spatio | Advantage Description |
-|---------|--------|-------|----------------------|
-| **Language** | Go | Rust | Better memory safety and performance |
-| **Concurrency Model** | Goroutines | Async/Await + RwLock | Lower memory/CPU overhead |
-| **Spatial Indexing** | Basic R-tree | **Highly optimized concurrent R-tree** | **4.65x QPS improvement, 5.2x latency reduction** |
-| **Type Safety** | Runtime checks | Compile-time guarantees | Fewer runtime errors |
-| **Memory Management** | GC | Zero-cost abstractions | **More predictable performance** |
 
 ### Development Environment Setup
 ```bash

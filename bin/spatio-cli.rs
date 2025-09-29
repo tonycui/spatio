@@ -82,10 +82,8 @@ fn run_interactive_mode(connection: &mut ClientConnection, host: &str, port: u16
                     continue;
                 }
                 
-                // 解析命令
-                let parts: Vec<String> = input.split_whitespace()
-                    .map(|s| s.to_string())
-                    .collect();
+                // 解析命令 - 特殊处理 SET 命令的 JSON 参数
+                let parts = parse_command_line(input);
                 
                 if parts.is_empty() {
                     continue;
@@ -140,4 +138,74 @@ fn run_interactive_mode(connection: &mut ClientConnection, host: &str, port: u16
     connection.disconnect()?;
     
     Ok(())
+}
+
+fn parse_command_line(input: &str) -> Vec<String> {
+    let input = input.trim();
+    if input.is_empty() {
+        return Vec::new();
+    }
+    
+    // 过滤控制字符
+    let cleaned_input: String = input.chars()
+        .filter(|&c| c.is_ascii_graphic() || c == ' ' || c == '\t')
+        .collect();
+    
+    let parts: Vec<&str> = cleaned_input.splitn(3, ' ').collect();
+    if parts.is_empty() {
+        return Vec::new();
+    }
+    
+    let command = parts[0].to_uppercase();
+    
+    match command.as_str() {
+        "SET" => {
+            if parts.len() >= 3 {
+                // SET collection id geojson
+                // 将第三部分（包含剩余所有内容）作为单个参数
+                let mut result = vec![
+                    command,
+                    parts[1].to_string(),
+                ];
+                
+                // 对于 SET 命令，将第三个参数后的所有内容作为一个整体
+                let remaining = parts[2];
+                
+                // 进一步分割 id 和 geojson
+                if let Some(space_pos) = remaining.find(' ') {
+                    let id = &remaining[..space_pos];
+                    let geojson = &remaining[space_pos + 1..];
+                    
+                    // 移除 geojson 外层的引号（如果有）
+                    let geojson = remove_outer_quotes(geojson);
+                    
+                    result.push(id.to_string());
+                    result.push(geojson.to_string());
+                } else {
+                    // 只有 id，没有 geojson
+                    result.push(remaining.to_string());
+                }
+                
+                result
+            } else {
+                // 参数不够，按正常方式分割
+                cleaned_input.split_whitespace().map(|s| s.to_string()).collect()
+            }
+        }
+        _ => {
+            // 其他命令按空格分割
+            cleaned_input.split_whitespace().map(|s| s.to_string()).collect()
+        }
+    }
+}
+
+fn remove_outer_quotes(s: &str) -> &str {
+    let s = s.trim();
+    if s.len() >= 2 {
+        if (s.starts_with('"') && s.ends_with('"')) || 
+           (s.starts_with('\'') && s.ends_with('\'')) {
+            return &s[1..s.len()-1];
+        }
+    }
+    s
 }

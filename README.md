@@ -84,39 +84,6 @@ INTERSECTS districts '{"type":"Polygon","coordinates":[[[3.0,2.0],[7.0,1.5],[8.5
 PING
 ```
 
-### Notes on CLI usage and quoting
-
-- spatio-cli interactive mode treats everything after the 3rd token in SET as one argument, so JSON doesn't need extra quotes:
-
-  ```bash
-  # spatio-cli (interactive or direct) – JSON can be unquoted
-  SET districts id_1 {"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}} 
-  ```
-
-- redis-cli splits by spaces; you must wrap JSON or it will be parsed as multiple args:
-
-  ```bash
-  # Recommended: single quotes
-  redis-cli -p 9851 SET districts id_1 '{"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}}'
-
-  # Or double quotes with escapes
-  redis-cli -p 9851 SET districts id_1 "{\"type\":\"Feature\",...}"
-
-  # Or pipe the body via -x (no quoting inside)
-  echo '{"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}}' \
-    | redis-cli -p 9851 -x SET districts id_1
-  ```
-
-- redis-cli displays Bulk Strings with quotes/escapes by default. Use --raw to see plain JSON:
-
-  ```bash
-  # With quotes/escapes (default)
-  redis-cli -p 9851 GET districts id_1
-  # Plain JSON
-  redis-cli -p 9851 --raw GET districts id_1
-  ```
-
-
 ## 🏗️ Architecture
 
 ```

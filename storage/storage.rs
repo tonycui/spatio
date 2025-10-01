@@ -100,10 +100,22 @@ impl GeoDatabase {
         collections.keys().cloned().collect()
     }
 
-    /// 异步删除整个 Collection
-    pub async fn drop_collection(&self, collection_id: &str) -> Result<bool> {
+    /// 异步删除整个 Collection，返回删除的项目数量
+    pub async fn drop_collection(&self, collection_id: &str) -> Result<usize> {
         let mut collections = self.collections.write().await;
-        Ok(collections.remove(collection_id).is_some())
+        
+        // 获取 collection 以统计项目数量
+        let count = if let Some(collection) = collections.get(collection_id) {
+            let rtree = collection.read().await;
+            rtree.count()
+        } else {
+            0 // collection 不存在，返回 0
+        };
+        
+        // 删除 collection
+        collections.remove(collection_id);
+        
+        Ok(count)
     }
 
     /// 异步获取数据库统计信息

@@ -2,6 +2,7 @@ pub mod basic;
 pub mod set;
 pub mod get;
 pub mod intersects;
+pub mod drop;
 pub mod args;
 pub mod registry;
 
@@ -12,9 +13,10 @@ use basic::{PingCommand, HelloCommand, QuitCommand};
 use set::SetCommand;
 use get::GetCommand;
 use intersects::IntersectsCommand;
+use drop::DropCommand;
 
 // 重新导出常用的类型
-pub use args::{ArgumentParser, SetArgs, GetArgs};
+pub use args::{ArgumentParser, SetArgs, GetArgs, DropArgs};
 pub use intersects::IntersectsArgs;
 pub use registry::CommandRegistry;
 
@@ -30,6 +32,7 @@ pub enum CommandType {
     Set(SetCommand),
     Get(GetCommand),
     Intersects(IntersectsCommand),
+    Drop(DropCommand),
 }
 
 impl CommandType {
@@ -41,6 +44,7 @@ impl CommandType {
             CommandType::Set(cmd) => cmd.name(),
             CommandType::Get(cmd) => cmd.name(),
             CommandType::Intersects(cmd) => cmd.name(),
+            CommandType::Drop(cmd) => cmd.name(),
         }
     }
 
@@ -52,6 +56,7 @@ impl CommandType {
             CommandType::Set(cmd) => cmd.execute(args).await,
             CommandType::Get(cmd) => cmd.execute(args).await,
             CommandType::Intersects(cmd) => cmd.execute(args).await,
+            CommandType::Drop(cmd) => cmd.execute(args).await,
         }
     }
 }

@@ -137,6 +137,17 @@ impl<'a> ArgumentParser<'a> {
         str_val.parse::<usize>()
             .map_err(|_| format!("ERR invalid {}: expected positive integer", param_name))
     }
+
+    /// 解析 DROP 命令的参数
+    pub fn parse_drop_args(&self) -> std::result::Result<DropArgs, String> {
+        self.check_arg_count(1)?;
+        
+        let collection_id = self.get_string(0, "collection ID")?;
+        
+        Ok(DropArgs {
+            collection_id: collection_id.to_string(),
+        })
+    }
     
 }
 
@@ -161,6 +172,12 @@ pub struct IntersectsArgs {
     pub collection_id: String,
     pub geometry: Geometry,
     pub limit: usize,
+}
+
+/// DROP 命令的解析结果
+#[derive(Debug)]
+pub struct DropArgs {
+    pub collection_id: String,
 }
 
 #[cfg(test)]

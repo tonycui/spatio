@@ -37,7 +37,7 @@ impl Command for IntersectsCommand {
             };
             
             // 执行空间查询
-            match database.intersects(&parsed_args.collection_id, &parsed_args.geometry, parsed_args.limit).await {
+            match database.intersects(&parsed_args.collection_id, &parsed_args.geometry, parsed_args.limit, parsed_args.within).await {
                 Ok(results) => {
                     if results.is_empty() {
                         Ok(RespResponse::array(None))
@@ -173,5 +173,115 @@ mod tests {
 
         let result = cmd.execute(&args).await.unwrap();
         assert!(result.contains("ERR invalid GeoJSON"));
+    }
+
+    #[tokio::test]
+    async fn test_intersects_command_with_within_true() {
+        let database = Arc::new(GeoDatabase::new());
+        
+        // 添加测试数据：三个点
+        // point1 完全在查询多边形内
+        let point1 = json!({
+            "type": "Point",
+            "coordinates": [2.0, 2.0]
+        });
+        // point2 在多边形边界上
+        let point2 = json!({
+            "type": "Point", 
+            "coordinates": [5.0, 0.0]
+        });
+        // point3 在多边形外
+        let point3 = json!({
+            "type": "Point",
+            "coordinates": [15.0, 15.0]
+        });
+        
+        database.set("test", "p1", &point1.to_string()).await.unwrap();
+        database.set("test", "p2", &point2.to_string()).await.unwrap();
+        database.set("test", "p3", &point3.to_string()).await.unwrap();
+
+        let cmd = IntersectsCommand::new(Arc::clone(&database));
+
+        // 查询多边形
+        let query_polygon = json!({
+            "type": "Polygon",
+            "coordinates": [[
+                [0.0, 0.0],
+                [10.0, 0.0],
+                [10.0, 10.0],
+                [0.0, 10.0],
+                [0.0, 0.0]
+            ]]
+        });
+
+        // 使用 WITHIN true 查询 - 只返回完全在内部的点
+        let args_within = vec![
+            RespValue::BulkString(Some("test".to_string())),
+            RespValue::BulkString(Some(query_polygon.to_string())),
+            RespValue::BulkString(Some("WITHIN".to_string())),
+            RespValue::BulkString(Some("true".to_string())),
+        ];
+
+        let result_within = cmd.execute(&args_within).await.unwrap();
+        
+        // 应该包含 point1 和 point2（边界上的点也算在内）
+        assert!(result_within.contains("2.0"));
+        
+        // 使用 WITHIN false（或默认）查询 - 返回所有相交的点
+        let args_intersects = vec![
+            RespValue::BulkString(Some("test".to_string())),
+            RespValue::BulkString(Some(query_polygon.to_string())),
+            RespValue::BulkString(Some("WITHIN".to_string())),
+            RespValue::BulkString(Some("false".to_string())),
+        ];
+
+        let result_intersects = cmd.execute(&args_intersects).await.unwrap();
+        
+        // 应该包含 point1 和 point2
+        assert!(result_intersects.contains("2.0"));
+    }
+
+    #[tokio::test]
+    async fn test_intersects_command_with_within_and_limit() {
+        let database = Arc::new(GeoDatabase::new());
+        
+        // 添加多个在多边形内的点
+        for i in 1..=5 {
+            let point = json!({
+                "type": "Point",
+                "coordinates": [i as f64, i as f64]
+            });
+            database.set("test", &format!("p{}", i), &point.to_string()).await.unwrap();
+        }
+
+        let cmd = IntersectsCommand::new(Arc::clone(&database));
+
+        // 查询多边形（覆盖所有点）
+        let query_polygon = json!({
+            "type": "Polygon",
+            "coordinates": [[
+                [0.0, 0.0],
+                [10.0, 0.0],
+                [10.0, 10.0],
+                [0.0, 10.0],
+                [0.0, 0.0]
+            ]]
+        });
+
+        // 使用 WITHIN true 和 LIMIT 3
+        let args = vec![
+            RespValue::BulkString(Some("test".to_string())),
+            RespValue::BulkString(Some(query_polygon.to_string())),
+            RespValue::BulkString(Some("WITHIN".to_string())),
+            RespValue::BulkString(Some("true".to_string())),
+            RespValue::BulkString(Some("LIMIT".to_string())),
+            RespValue::BulkString(Some("3".to_string())),
+        ];
+
+        let result = cmd.execute(&args).await.unwrap();
+        
+        // 应该最多返回 3 个结果
+        // 数组格式是 *3\r\n 开头
+        assert!(result.starts_with("*3\r\n") || result.starts_with("*2\r\n") || result.starts_with("*1\r\n"));
     }
 }

@@ -1,7 +1,7 @@
 use super::super::rectangle::Rectangle;
 use super::super::node::{Node, Entry};
 use super::super::rtree::RTree;
-use geo::{Geometry, Intersects};
+use geo::{Geometry, Intersects, Within};
 use super::super::rtree::GeoItem;
 use super::utils::geometry_to_bbox;
 
@@ -10,13 +10,14 @@ use crate::storage::geometry_utils::geometry_to_geojson;
 
 /// 搜索操作相关算法
 impl RTree {
-    /// 搜索与查询矩形相交的所有条目 - 遵循论文Algorithm Search
-    pub fn search(&self, geometry: &Geometry, limit: usize) -> Vec<GeoItem> {
+    /// 搜索与查询几何体相交或完全包含在其中的所有条目
+    /// within: true = 完全包含在 geometry 内部, false = 与 geometry 相交
+    pub fn search(&self, geometry: &Geometry, limit: usize, within: bool) -> Vec<GeoItem> {
         let bbox = geometry_to_bbox(geometry);
         let mut results = Vec::new();
         
         if let Some(root) = self.root_ref() {
-            self.search_recursive(root, &bbox.unwrap(), geometry, &mut results, limit);
+            self.search_recursive(root, &bbox.unwrap(), geometry, &mut results, limit, within);
         }
         
         results
@@ -34,7 +35,8 @@ impl RTree {
     }
 
     /// 递归搜索 - 遵循论文Search算法
-    fn search_recursive(&self, node: &Node, query: &Rectangle, geometry: &Geometry, results: &mut Vec<GeoItem>, limit: usize) {
+    /// within: true = 完全包含在 geometry 内部, false = 与 geometry 相交
+    fn search_recursive(&self, node: &Node, query: &Rectangle, geometry: &Geometry, results: &mut Vec<GeoItem>, limit: usize, within: bool) {
         // limit == 0 表示无限制，其他值表示有限制
         if limit > 0 && results.len() >= limit {
             return;
@@ -47,7 +49,15 @@ impl RTree {
                     Entry::Data { data, .. } => {
                         // 根据 Geometry 进行精确比较
                         if let Some(entry_geometry) = self.geometry_map.get(data) {
-                            if entry_geometry.intersects(geometry) {
+                            let matches = if within {
+                                // Within 查询：entry_geometry 必须完全包含在 geometry 内部
+                                entry_geometry.is_within(geometry)
+                            } else {
+                                // Intersects 查询：entry_geometry 与 geometry 相交
+                                entry_geometry.intersects(geometry)
+                            };
+                            
+                            if matches {
                                 // S2: 添加数据到结果
                                 results.push(GeoItem {
                                     id: data.clone(),
@@ -62,7 +72,7 @@ impl RTree {
                     }
                     Entry::Node { node, .. } => {
                         // 递归搜索子节点
-                        self.search_recursive(node, query, geometry, results, limit);
+                        self.search_recursive(node, query, geometry, results, limit, within);
                         if limit > 0 && results.len() >= limit {
                             return;
                         }
@@ -120,7 +130,7 @@ mod tests {
         ));
         
         // 搜索相交的几何体
-        let results = rtree.search( &query_polygon,100);
+        let results = rtree.search(&query_polygon, 100, false);
         
         // 应该找到数据 1 和 2（在查询多边形内），但不包括 3
         // 检查 id 是否存在
@@ -153,19 +163,19 @@ fn test_search_with_limit() {
     ));
     
     // 测试无限制情况 - 应该返回所有5个结果
-    let results_no_limit = rtree.search(&query_polygon, 0);
+    let results_no_limit = rtree.search(&query_polygon, 0, false);
     assert_eq!(results_no_limit.len(), 5);
     
     // 测试limit = 3 - 应该只返回3个结果
-    let results_limit_3 = rtree.search(&query_polygon, 3);
+    let results_limit_3 = rtree.search(&query_polygon, 3, false);
     assert_eq!(results_limit_3.len(), 3);
     
     // 测试limit = 1 - 应该只返回1个结果
-    let results_limit_1 = rtree.search(&query_polygon, 1);
+    let results_limit_1 = rtree.search(&query_polygon, 1, false);
     assert_eq!(results_limit_1.len(), 1);
     
     // 测试limit大于实际结果数 - 应该返回所有5个结果
-    let results_limit_10 = rtree.search(&query_polygon, 10);
+    let results_limit_10 = rtree.search(&query_polygon, 10, false);
     assert_eq!(results_limit_10.len(), 5);
 }
 
@@ -192,10 +202,10 @@ fn test_search_limit_early_termination() {
     ));
     
     // 测试小的limit值，验证早期终止
-    let results_limit_2 = rtree.search(&query_polygon, 2);
+    let results_limit_2 = rtree.search(&query_polygon, 2, false);
     assert_eq!(results_limit_2.len(), 2);
     
-    let results_limit_5 = rtree.search(&query_polygon, 5);
+    let results_limit_5 = rtree.search(&query_polygon, 5, false);
     assert_eq!(results_limit_5.len(), 5);
     
     // 验证返回的结果都是有效的
@@ -257,7 +267,7 @@ fn test_search_limit_early_termination() {
             vec![]
         ));
         
-        let results = rtree.search( &query_poly,100);
+        let results = rtree.search(&query_poly, 100, false);
         
         // 应该找到poly1和poly2（相交），但不包括poly3（不相交）
         // 检查 id 是否存在

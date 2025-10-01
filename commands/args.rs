@@ -105,11 +105,12 @@ impl<'a> ArgumentParser<'a> {
     }
 
     /// 解析 INTERSECTS 命令的参数
+    /// 语法: INTERSECTS collection geojson [WITHIN true|false] [LIMIT n]
     pub fn parse_intersects_args(&self) -> std::result::Result<IntersectsArgs, String> {
-        // 支持2个或3个参数
-        if self.args.len() < 2 || self.args.len() > 3 {
+        // 至少需要2个参数: collection 和 geojson
+        if self.args.len() < 2 {
             return Err(format!(
-                "ERR wrong number of arguments for 'INTERSECTS' command. Expected 2 or 3, got {}",
+                "ERR wrong number of arguments for 'INTERSECTS' command. Expected at least 2, got {}",
                 self.args.len()
             ));
         }
@@ -117,17 +118,52 @@ impl<'a> ArgumentParser<'a> {
         let collection_id = self.get_string(0, "collection ID")?;
         let geometry = self.get_geometry(1)?;
         
-        // 解析可选的 limit 参数
-        let limit = if self.args.len() == 3 {
-            self.get_integer(2, "limit")?
-        } else {
-            0 // 默认值，表示无限制
-        };
+        // 解析可选参数: WITHIN 和 LIMIT
+        let mut within = false; // 默认为 false (相交查询)
+        let mut limit = 0; // 默认无限制
+        
+        let mut i = 2;
+        while i < self.args.len() {
+            let key = self.get_string(i, "option key")?.to_uppercase();
+            
+            match key.as_str() {
+                "WITHIN" => {
+                    if i + 1 >= self.args.len() {
+                        return Err("ERR WITHIN option requires a value (true or false)".to_string());
+                    }
+                    let value = self.get_string(i + 1, "WITHIN value")?;
+                    within = match value.to_lowercase().as_str() {
+                        "true" | "1" | "yes" => true,
+                        "false" | "0" | "no" => false,
+                        _ => return Err(format!("ERR invalid WITHIN value: expected true or false, got {}", value)),
+                    };
+                    i += 2;
+                }
+                "LIMIT" => {
+                    if i + 1 >= self.args.len() {
+                        return Err("ERR LIMIT option requires a value".to_string());
+                    }
+                    limit = self.get_integer(i + 1, "LIMIT value")?;
+                    i += 2;
+                }
+                _ => {
+                    // 向后兼容: 如果只有3个参数且第3个是数字，当作 limit
+                    if self.args.len() == 3 && i == 2 {
+                        if let Ok(parsed_limit) = self.get_integer(2, "limit") {
+                            limit = parsed_limit;
+                            break;
+                        }
+                    }
+                    return Err(format!("ERR unknown option '{}' for INTERSECTS command", key));
+                }
+            }
+        }
 
         Ok(IntersectsArgs {
             collection_id: collection_id.to_string(),
             geometry,
             limit,
+            within,
         })
     }
 
@@ -172,6 +208,7 @@ pub struct IntersectsArgs {
     pub collection_id: String,
     pub geometry: Geometry,
     pub limit: usize,
+    pub within: bool,  // true: 包含在内，false: 相交
 }
 
 /// DROP 命令的解析结果

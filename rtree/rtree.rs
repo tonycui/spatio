@@ -301,7 +301,7 @@ mod tests {
             ].into(),
             vec![]
         ));
-        let results = rtree.search(&query_geom, 100);
+        let results = rtree.search(&query_geom, 100, false);
         
         // 应该找到数据 1 和 2
         // 检查 id 是否存在
@@ -320,7 +320,7 @@ mod tests {
             ].into(),
             vec![]
         ));
-        let results2 = rtree.search( &query_geom2, 100);
+        let results2 = rtree.search(&query_geom2, 100, false);
         assert!(results2.is_empty());
     }
 
@@ -354,7 +354,7 @@ mod tests {
             ].into(),
             vec![]
         ));
-        let results = rtree.search( &query_geom, 100);
+        let results = rtree.search(&query_geom, 100, false);
         println!("Search results: {:?}", results);
         // 暂时注释掉这个断言
         // assert_eq!(results.len(), 10);

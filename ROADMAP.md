@@ -59,10 +59,9 @@ Spatio is a high-performance geospatial database developed in Rust, designed for
 - [ ] Query result sorting and pagination
 
 **Data Management Commands**
-- [ ] `SCAN` - Scan all objects
-- [ ] `KEYS` - List all collections
-- [ ] `DROP` - Delete entire collection
-- [ ] `INFO` - Database statistics
+- [x] `KEYS` - List all collections
+- [x] `DROP` - Delete entire collection
+- [x] `INFO` - Database statistics
 
 **Basic Persistence**
 - [ ] Data persistence to disk

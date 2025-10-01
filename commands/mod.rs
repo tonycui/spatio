@@ -3,6 +3,7 @@ pub mod set;
 pub mod get;
 pub mod intersects;
 pub mod drop;
+pub mod keys;
 pub mod args;
 pub mod registry;
 
@@ -14,6 +15,7 @@ use set::SetCommand;
 use get::GetCommand;
 use intersects::IntersectsCommand;
 use drop::DropCommand;
+use keys::KeysCommand;
 
 // 重新导出常用的类型
 pub use args::{ArgumentParser, SetArgs, GetArgs, DropArgs};
@@ -33,6 +35,7 @@ pub enum CommandType {
     Get(GetCommand),
     Intersects(IntersectsCommand),
     Drop(DropCommand),
+    Keys(KeysCommand),
 }
 
 impl CommandType {
@@ -45,6 +48,7 @@ impl CommandType {
             CommandType::Get(cmd) => cmd.name(),
             CommandType::Intersects(cmd) => cmd.name(),
             CommandType::Drop(cmd) => cmd.name(),
+            CommandType::Keys(cmd) => cmd.name(),
         }
     }
 
@@ -57,6 +61,7 @@ impl CommandType {
             CommandType::Get(cmd) => cmd.execute(args).await,
             CommandType::Intersects(cmd) => cmd.execute(args).await,
             CommandType::Drop(cmd) => cmd.execute(args).await,
+            CommandType::Keys(cmd) => cmd.execute(args).await,
         }
     }
 }

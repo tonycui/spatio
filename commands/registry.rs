@@ -5,7 +5,7 @@ use crate::protocol::parser::RespValue;
 use crate::storage::GeoDatabase;
 use crate::Result;
 
-use super::{CommandType, basic::{PingCommand, HelloCommand, QuitCommand}, set::SetCommand, get::GetCommand, intersects::IntersectsCommand, drop::DropCommand};
+use super::{CommandType, basic::{PingCommand, HelloCommand, QuitCommand}, set::SetCommand, get::GetCommand, intersects::IntersectsCommand, drop::DropCommand, keys::KeysCommand};
 
 /// 命令注册表，管理所有可用的命令
 pub struct CommandRegistry {
@@ -33,6 +33,7 @@ impl CommandRegistry {
         
         // 注册管理命令
         registry.register(CommandType::Drop(DropCommand::new(Arc::clone(&database))));
+        registry.register(CommandType::Keys(KeysCommand::new(Arc::clone(&database))));
         
         registry
     }

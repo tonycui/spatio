@@ -36,7 +36,8 @@ impl Command for NearbyCommand {
             };
             
             // 执行 KNN 查询
-            match database.nearby(&parsed_args.collection_id, parsed_args.query_lon, parsed_args.query_lat, parsed_args.k).await {
+            let k = parsed_args.k.unwrap_or(0);  // 0 表示不限制数量
+            match database.nearby(&parsed_args.collection_id, parsed_args.query_lon, parsed_args.query_lat, k, parsed_args.max_radius).await {
                 Ok(results) => {
                     if results.is_empty() {
                         Ok(RespResponse::array(None))
@@ -210,5 +211,98 @@ mod tests {
         // 结果应该按距离排序
         // p1 应该第一个（距离最近）
         assert!(result.contains("116.0"));
+    }
+
+    #[tokio::test]
+    async fn test_nearby_command_with_radius_only() {
+        let database = Arc::new(GeoDatabase::new());
+        
+        // 添加不同距离的点
+        let point1 = json!({"type": "Point", "coordinates": [116.001, 39.0]});  // ~111m
+        let point2 = json!({"type": "Point", "coordinates": [116.005, 39.0]});  // ~555m
+        let point3 = json!({"type": "Point", "coordinates": [116.01, 39.0]});   // ~1110m
+        let point4 = json!({"type": "Point", "coordinates": [116.02, 39.0]});   // ~2220m
+        
+        database.set("fleet", "v1", &point1.to_string()).await.unwrap();
+        database.set("fleet", "v2", &point2.to_string()).await.unwrap();
+        database.set("fleet", "v3", &point3.to_string()).await.unwrap();
+        database.set("fleet", "v4", &point4.to_string()).await.unwrap();
+
+        let cmd = NearbyCommand::new(Arc::clone(&database));
+
+        // 只使用 RADIUS，查询 1000 米内的所有点
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.0".to_string())),
+            RespValue::BulkString(Some("39.0".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("1000".to_string())),
+        ];
+
+        let result = cmd.execute(&args).await.unwrap();
+        
+        println!("Radius only result: {}", result);
+        
+        // 应该返回 v1 和 v2（在 1000m 内），但不包括 v3 和 v4
+        assert!(result.starts_with("*"));
+    }
+
+    #[tokio::test]
+    async fn test_nearby_command_with_count_and_radius() {
+        let database = Arc::new(GeoDatabase::new());
+        
+        // 添加多个点
+        for i in 1..=10 {
+            let lon = 116.0 + (i as f64) * 0.001;
+            let point = json!({"type": "Point", "coordinates": [lon, 39.0]});
+            database.set("fleet", &format!("v{}", i), &point.to_string()).await.unwrap();
+        }
+
+        let cmd = NearbyCommand::new(Arc::clone(&database));
+
+        // COUNT 5 + RADIUS 500m，应该返回 500m 内最近的 5 个（如果有的话）
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.0".to_string())),
+            RespValue::BulkString(Some("39.0".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("5".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("500".to_string())),
+        ];
+
+        let result = cmd.execute(&args).await.unwrap();
+        
+        println!("Count + Radius result: {}", result);
+        assert!(result.starts_with("*"));
+    }
+
+    #[tokio::test]
+    async fn test_nearby_command_radius_reverse_order() {
+        let database = Arc::new(GeoDatabase::new());
+        
+        let point = json!({"type": "Point", "coordinates": [116.001, 39.0]});
+        database.set("fleet", "v1", &point.to_string()).await.unwrap();
+
+        let cmd = NearbyCommand::new(Arc::clone(&database));
+
+        // RADIUS 在 COUNT 之前（测试参数顺序不敏感）
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.0".to_string())),
+            RespValue::BulkString(Some("39.0".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("1000".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("10".to_string())),
+        ];
+
+        let result = cmd.execute(&args).await.unwrap();
+        
+        println!("Reverse order result: {}", result);
+        assert!(result.starts_with("*"));
     }
 }

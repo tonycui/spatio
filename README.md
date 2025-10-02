@@ -75,10 +75,21 @@ SET boundaries beijing {
 # Insert an irregular polygon (representing a city district)
 SET districts id_1 '{"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}}'
 
-
 # Find all districts that intersect with the delivery zone
 INTERSECTS districts '{"type":"Polygon","coordinates":[[[3.0,2.0],[7.0,1.5],[8.5,5.0],[6.0,7.0],[3.5,6.5],[3.0,2.0]]]}'
 
+# Find nearest neighbors (KNN query)
+# Syntax: NEARBY collection POINT lon lat [COUNT k] [RADIUS meters]
+# At least one of COUNT or RADIUS must be specified
+
+# Find 10 nearest vehicles
+NEARBY fleet POINT 116.4 39.9 COUNT 10
+
+# Find all vehicles within 1000 meters
+NEARBY fleet POINT 116.4 39.9 RADIUS 1000
+
+# Find 5 nearest vehicles within 2000 meters
+NEARBY fleet POINT 116.4 39.9 COUNT 5 RADIUS 2000
 
 # Test connection
 PING

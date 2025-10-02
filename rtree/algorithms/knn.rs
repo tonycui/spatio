@@ -341,9 +341,10 @@ pub fn knn_search(
     k: usize,
     geometry_map: &std::collections::HashMap<String, Geometry>,
     geojson_map: &std::collections::HashMap<String, String>,
+    max_radius: Option<f64>,
 ) -> Vec<KnnResult> {
-    // Early return if tree is empty or k is 0
-    if root.is_none() || k == 0 {
+    // Early return if tree is empty or (k is 0 and no radius limit)
+    if root.is_none() || (k == 0 && max_radius.is_none()) {
         return Vec::new();
     }
 
@@ -367,9 +368,16 @@ pub fn knn_search(
 
     // Process the heap until we have K results or heap is empty
     while let Some(entry) = heap.pop() {
+        // Early termination based on radius: if min distance exceeds radius, skip
+        if let Some(radius) = max_radius {
+            if entry.min_distance() > radius {
+                continue;
+            }
+        }
+
         // Early termination: if we have K results and the next entry's
         // minimum distance is greater than our furthest result, we're done
-        if results.len() >= k {
+        if k > 0 && results.len() >= k {
             let furthest_distance = results.last().unwrap().distance;
             if entry.min_distance() > furthest_distance {
                 break;
@@ -379,6 +387,13 @@ pub fn knn_search(
         match entry {
             QueueEntry::LeafEntry { min_distance, item } => {
                 // This is an actual data item
+                // Skip if outside radius
+                if let Some(radius) = max_radius {
+                    if min_distance > radius {
+                        continue;
+                    }
+                }
+
                 results.push(KnnResult {
                     item,
                     distance: min_distance,
@@ -389,8 +404,8 @@ pub fn knn_search(
                     a.distance.partial_cmp(&b.distance).unwrap_or(Ordering::Equal)
                 });
 
-                // Keep only K nearest
-                if results.len() > k {
+                // Keep only K nearest (if k > 0)
+                if k > 0 && results.len() > k {
                     results.truncate(k);
                 }
             }
@@ -595,7 +610,7 @@ mod tests {
     fn test_knn_search_empty_tree() {
         let geometry_map = std::collections::HashMap::new();
         let geojson_map = std::collections::HashMap::new();
-        let results = knn_search(None, 116.4, 39.9, 10, &geometry_map, &geojson_map);
+        let results = knn_search(None, 116.4, 39.9, 10, &geometry_map, &geojson_map, None);
         assert_eq!(results.len(), 0);
     }
 
@@ -603,7 +618,7 @@ mod tests {
     fn test_knn_search_k_zero() {
         let geometry_map = std::collections::HashMap::new();
         let geojson_map = std::collections::HashMap::new();
-        let results = knn_search(None, 116.4, 39.9, 0, &geometry_map, &geojson_map);
+        let results = knn_search(None, 116.4, 39.9, 0, &geometry_map, &geojson_map, None);
         assert_eq!(results.len(), 0);
     }
 
@@ -640,6 +655,7 @@ mod tests {
             3,
             &tree.geometry_map,
             &tree.geojson_map,
+            None,
         );
 
         // Should return 3 results
@@ -688,6 +704,7 @@ mod tests {
             10,
             &tree.geometry_map,
             &tree.geojson_map,
+            None,
         );
 
         // Should return only 3 results
@@ -731,6 +748,7 @@ mod tests {
             k,
             &tree.geometry_map,
             &tree.geojson_map,
+            None,
         );
 
         // Brute force: calculate all distances and sort
@@ -796,6 +814,7 @@ mod tests {
             k,
             &tree.geometry_map,
             &tree.geojson_map,
+            None,
         );
         let knn_duration = start.elapsed();
 
@@ -828,5 +847,92 @@ mod tests {
         // For larger datasets (1000+ points), KNN should be faster
         // But for 400 points, it might be similar or slower due to overhead
         // The important thing is that it's correct
+    }
+
+    #[test]
+    fn test_knn_with_radius() {
+        use crate::rtree::RTree;
+
+        let mut tree = RTree::new(4);
+
+        // Insert points at various distances from query point (116.0, 39.0)
+        let test_data = vec![
+            ("p1", 116.001, 39.0),    // ~111 meters away
+            ("p2", 116.005, 39.0),    // ~555 meters away
+            ("p3", 116.01, 39.0),     // ~1110 meters away
+            ("p4", 116.02, 39.0),     // ~2220 meters away
+            ("p5", 116.0, 39.001),    // ~111 meters away (纬度方向)
+        ];
+
+        for (id, lon, lat) in test_data.iter() {
+            let geojson = format!(
+                r#"{{"type":"Point","coordinates":[{},{}]}}"#,
+                lon, lat
+            );
+            tree.insert_geojson(id.to_string(), &geojson);
+        }
+
+        // Test 1: Only radius (1000 meters), no k limit
+        let results = knn_search(
+            tree.get_root(),
+            116.0,
+            39.0,
+            0,  // No k limit
+            &tree.geometry_map,
+            &tree.geojson_map,
+            Some(1000.0),  // 1000 meters radius
+        );
+
+        // Should return p1, p2, p3, p5 (all within 1000m), but not p4
+        assert_eq!(results.len(), 4, "Should find 4 items within 1000m");
+        for result in &results {
+            assert!(result.distance <= 1000.0, 
+                "All results should be within 1000m, found {} at {}m", 
+                result.item.id, result.distance);
+        }
+        // Verify p4 is NOT in results (it's >1000m away)
+        assert!(!results.iter().any(|r| r.item.id == "p4"), "p4 should not be in results");
+
+        // Test 2: Only k (k=2), no radius limit
+        let results = knn_search(
+            tree.get_root(),
+            116.0,
+            39.0,
+            2,  // Only 2 nearest
+            &tree.geometry_map,
+            &tree.geojson_map,
+            None,  // No radius limit
+        );
+
+        assert_eq!(results.len(), 2, "Should return exactly 2 items");
+
+        // Test 3: Both radius and k (radius=2000m, k=2)
+        let results = knn_search(
+            tree.get_root(),
+            116.0,
+            39.0,
+            2,  // Only 2 nearest
+            &tree.geometry_map,
+            &tree.geojson_map,
+            Some(2000.0),  // 2000 meters radius
+        );
+
+        assert_eq!(results.len(), 2, "Should return 2 items within 2000m");
+        for result in &results {
+            assert!(result.distance <= 2000.0);
+        }
+
+        // Test 4: Radius smaller than nearest point (should return empty)
+        let results = knn_search(
+            tree.get_root(),
+            116.0,
+            39.0,
+            10,  // Want 10 items
+            &tree.geometry_map,
+            &tree.geojson_map,
+            Some(50.0),  // But only within 50 meters (none exist)
+        );
+
+        assert_eq!(results.len(), 0, "Should return empty when no items within radius");
     }
 }

@@ -125,7 +125,7 @@ impl RTree {
     ///     println!("Found {} at distance {} meters", item.id, distance);
     /// }
     /// ```
-    pub fn nearby(&self, query_lon: f64, query_lat: f64, k: usize) -> Vec<(GeoItem, f64)> {
+    pub fn nearby(&self, query_lon: f64, query_lat: f64, k: usize, max_radius: Option<f64>) -> Vec<(GeoItem, f64)> {
         use super::knn::knn_search;
 
         // 直接传递 geometry_map 和 geojson_map 的引用，避免复制整个数据集
@@ -136,6 +136,7 @@ impl RTree {
             k,
             &self.geometry_map,
             &self.geojson_map,
+            max_radius,
         );
 
         // 转换结果为 (GeoItem, distance) 元组

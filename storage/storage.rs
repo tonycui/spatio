@@ -160,7 +160,8 @@ impl GeoDatabase {
     /// * `collection_id` - Collection 名称
     /// * `query_lon` - 查询点的经度
     /// * `query_lat` - 查询点的纬度
-    /// * `k` - 返回最近的 k 个对象
+    /// * `k` - 返回最近的 k 个对象（0 表示不限制数量，配合 max_radius 使用）
+    /// * `max_radius` - 最大搜索半径（米），None 表示不限制半径
     /// 
     /// # Returns
     /// 
@@ -169,7 +170,14 @@ impl GeoDatabase {
     /// - `f64` - 该对象到查询点的距离（米）
     /// 
     /// 结果按距离升序排列（最近的在前）
-    pub async fn nearby(&self, collection_id: &str, query_lon: f64, query_lat: f64, k: usize) -> Result<Vec<(GeoItem, f64)>> {
+    /// 
+    /// # Note
+    /// 
+    /// k 和 max_radius 至少需要提供一个：
+    /// - 如果只提供 k，返回最近的 k 个对象
+    /// - 如果只提供 max_radius，返回半径内所有对象
+    /// - 如果两者都提供，返回半径内最近的 k 个对象
+    pub async fn nearby(&self, collection_id: &str, query_lon: f64, query_lat: f64, k: usize, max_radius: Option<f64>) -> Result<Vec<(GeoItem, f64)>> {
         // 1. 获取 collection
         let collections = self.collections.read().await;
         let collection = match collections.get(collection_id) {
@@ -182,7 +190,7 @@ impl GeoDatabase {
         let data = collection.read().await;
 
         // 3. 调用 KNN 算法
-        let knn_results = data.nearby(query_lon, query_lat, k);
+        let knn_results = data.nearby(query_lon, query_lat, k, max_radius);
 
         Ok(knn_results)
     }

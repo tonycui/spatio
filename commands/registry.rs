@@ -193,4 +193,73 @@ mod tests {
         assert!(result.contains("ERR"));
         assert!(result.contains("wrong number of arguments"));
     }
+
+    #[tokio::test]
+    async fn test_nearby_with_radius_integration() {
+        use crate::protocol::parser::RespValue;
+        use serde_json::json;
+        
+        let database = Arc::new(GeoDatabase::new());
+        let registry = CommandRegistry::new(database);
+        
+        // 插入不同距离的点
+        let point1 = json!({"type": "Point", "coordinates": [116.001, 39.0]});  // ~111m
+        let point2 = json!({"type": "Point", "coordinates": [116.005, 39.0]});  // ~555m
+        let point3 = json!({"type": "Point", "coordinates": [116.015, 39.0]});  // ~1665m
+        
+        let set_args1 = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v1".to_string())),
+            RespValue::BulkString(Some(point1.to_string())),
+        ];
+        registry.execute("SET", &set_args1).await.unwrap();
+        
+        let set_args2 = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v2".to_string())),
+            RespValue::BulkString(Some(point2.to_string())),
+        ];
+        registry.execute("SET", &set_args2).await.unwrap();
+        
+        let set_args3 = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v3".to_string())),
+            RespValue::BulkString(Some(point3.to_string())),
+        ];
+        registry.execute("SET", &set_args3).await.unwrap();
+        
+        // 测试只使用 RADIUS
+        let nearby_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.0".to_string())),
+            RespValue::BulkString(Some("39.0".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("1000".to_string())),
+        ];
+        
+        let result = registry.execute("NEARBY", &nearby_args).await.unwrap();
+        println!("Radius integration result:\n{}", result);
+        
+        // 应该返回 v1 和 v2（在 1000m 内），不包括 v3
+        assert!(result.starts_with("*2"));
+        
+        // 测试 COUNT + RADIUS 组合
+        let nearby_args2 = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.0".to_string())),
+            RespValue::BulkString(Some("39.0".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("1".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("2000".to_string())),
+        ];
+        
+        let result2 = registry.execute("NEARBY", &nearby_args2).await.unwrap();
+        println!("Count + Radius integration result:\n{}", result2);
+        
+        // 应该只返回 1 个结果（最近的 v1）
+        assert!(result2.starts_with("*1"));
+    }
 }

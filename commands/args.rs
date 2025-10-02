@@ -186,18 +186,23 @@ impl<'a> ArgumentParser<'a> {
     }
 
     /// 解析 NEARBY 命令的参数
-    /// 语法: NEARBY collection POINT lon lat COUNT k
+    /// 语法: NEARBY collection POINT lon lat [COUNT k] [RADIUS meters]
+    /// 
+    /// COUNT 和 RADIUS 至少需要提供一个，也可以两者都提供
     /// 
     /// # Examples
     /// 
     /// ```ignore
-    /// NEARBY fleet POINT 116.4 39.9 COUNT 10
+    /// NEARBY fleet POINT 116.4 39.9 COUNT 10           // 最近的 10 个
+    /// NEARBY fleet POINT 116.4 39.9 RADIUS 1000       // 1000米内所有
+    /// NEARBY fleet POINT 116.4 39.9 COUNT 10 RADIUS 1000  // 1000米内最近的 10 个
+    /// NEARBY fleet POINT 116.4 39.9 RADIUS 1000 COUNT 10  // 顺序不限
     /// ```
     pub fn parse_nearby_args(&self) -> std::result::Result<NearbyArgs, String> {
-        // 至少需要 6 个参数: collection, POINT, lon, lat, COUNT, k
-        if self.args.len() < 6 {
+        // 至少需要 4 个参数: collection, POINT, lon, lat
+        if self.args.len() < 4 {
             return Err(format!(
-                "ERR wrong number of arguments for 'NEARBY' command. Expected at least 6, got {}. Usage: NEARBY collection POINT lon lat COUNT k",
+                "ERR wrong number of arguments for 'NEARBY' command. Expected at least 4, got {}. Usage: NEARBY collection POINT lon lat [COUNT k] [RADIUS meters]",
                 self.args.len()
             ));
         }
@@ -231,19 +236,56 @@ impl<'a> ArgumentParser<'a> {
             return Err(format!("ERR invalid latitude: must be between -90 and 90, got {}", query_lat));
         }
 
-        // 验证 COUNT 关键字
-        let count_keyword = self.get_string(4, "COUNT keyword")?;
-        if count_keyword.to_uppercase() != "COUNT" {
-            return Err(format!(
-                "ERR invalid syntax: expected 'COUNT', got '{}'",
-                count_keyword
-            ));
+        // 解析可选的 COUNT 和 RADIUS 参数
+        let mut k: Option<usize> = None;
+        let mut max_radius: Option<f64> = None;
+        let mut i = 4;
+
+        while i < self.args.len() {
+            let keyword = self.get_string(i, "keyword")?;
+            let keyword_upper = keyword.to_uppercase();
+
+            if keyword_upper == "COUNT" {
+                if i + 1 >= self.args.len() {
+                    return Err("ERR COUNT keyword requires a value".to_string());
+                }
+                if k.is_some() {
+                    return Err("ERR duplicate COUNT keyword".to_string());
+                }
+                let count_val = self.get_integer(i + 1, "count")?;
+                if count_val == 0 {
+                    return Err("ERR count must be greater than 0".to_string());
+                }
+                k = Some(count_val);
+                i += 2;
+            } else if keyword_upper == "RADIUS" {
+                if i + 1 >= self.args.len() {
+                    return Err("ERR RADIUS keyword requires a value".to_string());
+                }
+                if max_radius.is_some() {
+                    return Err("ERR duplicate RADIUS keyword".to_string());
+                }
+                let radius_str = self.get_string(i + 1, "radius")?;
+                let radius_val: f64 = radius_str.parse()
+                    .map_err(|_| format!("ERR invalid radius: expected number, got '{}'", radius_str))?;
+                if radius_val <= 0.0 {
+                    return Err("ERR radius must be greater than 0".to_string());
+                }
+                max_radius = Some(radius_val);
+                i += 2;
+            } else {
+                return Err(format!(
+                    "ERR invalid keyword: expected 'COUNT' or 'RADIUS', got '{}'",
+                    keyword
+                ));
+            }
         }
 
-        // 解析 k（返回结果数量）
-        let k = self.get_integer(5, "count")?;
-        if k == 0 {
-            return Err("ERR count must be greater than 0".to_string());
+        // 验证至少有一个参数
+        if k.is_none() && max_radius.is_none() {
+            return Err(
+                "ERR at least one of COUNT or RADIUS must be specified. Usage: NEARBY collection POINT lon lat [COUNT k] [RADIUS meters]".to_string()
+            );
         }
 
         Ok(NearbyArgs {
@@ -251,6 +293,7 @@ impl<'a> ArgumentParser<'a> {
             query_lon,
             query_lat,
             k,
+            max_radius,
         })
     }
     
@@ -292,7 +335,8 @@ pub struct NearbyArgs {
     pub collection_id: String,
     pub query_lon: f64,
     pub query_lat: f64,
-    pub k: usize,
+    pub k: Option<usize>,        // None 表示不限制数量
+    pub max_radius: Option<f64>, // None 表示不限制半径（米）
 }
 
 #[cfg(test)]
@@ -492,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_nearby_args_success() {
+    fn test_parse_nearby_args_success_with_count() {
         let args = vec![
             RespValue::BulkString(Some("fleet".to_string())),
             RespValue::BulkString(Some("POINT".to_string())),
@@ -510,7 +554,70 @@ mod tests {
         assert_eq!(parsed.collection_id, "fleet");
         assert_eq!(parsed.query_lon, 116.4);
         assert_eq!(parsed.query_lat, 39.9);
-        assert_eq!(parsed.k, 10);
+        assert_eq!(parsed.k, Some(10));
+        assert_eq!(parsed.max_radius, None);
+    }
+
+    #[test]
+    fn test_parse_nearby_args_success_with_radius() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("1000".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.collection_id, "fleet");
+        assert_eq!(parsed.query_lon, 116.4);
+        assert_eq!(parsed.query_lat, 39.9);
+        assert_eq!(parsed.k, None);
+        assert_eq!(parsed.max_radius, Some(1000.0));
+    }
+
+    #[test]
+    fn test_parse_nearby_args_success_with_both() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("10".to_string())),
+            RespValue::BulkString(Some("RADIUS".to_string())),
+            RespValue::BulkString(Some("5000".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.collection_id, "fleet");
+        assert_eq!(parsed.k, Some(10));
+        assert_eq!(parsed.max_radius, Some(5000.0));
+    }
+
+    #[test]
+    fn test_parse_nearby_args_missing_count_and_radius() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("at least one of COUNT or RADIUS"));
     }
 
     #[test]

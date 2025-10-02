@@ -144,6 +144,11 @@ impl RTree {
         &self.root
     }
 
+    /// 获取根节点（用于算法访问，如 KNN 搜索）
+    pub fn get_root(&self) -> Option<&Node> {
+        self.root.as_ref().map(|b| b.as_ref())
+    }
+
     /// 内部方法：获取最大条目数
     pub(crate) fn max_entries_internal(&self) -> usize {
         self.max_entries

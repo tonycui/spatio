@@ -55,7 +55,7 @@ Spatio is a high-performance geospatial database developed in Rust, designed for
 
 **Spatial Query Enhancement**
 - [x] `WITHIN` - Containment queries
-- [ ] `NEARBY` - Nearest neighbor queries
+- [x] `NEARBY` - Nearest neighbor queries (✨ KNN algorithm + command integration completed)
 - [ ] Query result sorting and pagination
 
 **Data Management Commands**

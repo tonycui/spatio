@@ -339,7 +339,8 @@ pub fn knn_search(
     query_lon: f64,
     query_lat: f64,
     k: usize,
-    items_map: &std::collections::HashMap<String, GeoItem>,
+    geometry_map: &std::collections::HashMap<String, Geometry>,
+    geojson_map: &std::collections::HashMap<String, String>,
 ) -> Vec<KnnResult> {
     // Early return if tree is empty or k is 0
     if root.is_none() || k == 0 {
@@ -398,17 +399,24 @@ pub fn knn_search(
                 for entry in &node.entries {
                     match entry {
                         Entry::Data { mbr: _, data } => {
-                            // This is a leaf entry - retrieve the full item
-                            if let Some(item) = items_map.get(data) {
+                            // This is a leaf entry - retrieve geometry and build GeoItem on demand
+                            if let Some(geometry) = geometry_map.get(data) {
                                 let distance = point_to_geometry_distance(
                                     query_lon,
                                     query_lat,
-                                    &item.geometry,
+                                    geometry,
                                 );
+
+                                // Build GeoItem on demand
+                                let item = GeoItem {
+                                    id: data.clone(),
+                                    geometry: geometry.clone(),
+                                    geojson: geojson_map.get(data).cloned().unwrap_or_default(),
+                                };
 
                                 heap.push(QueueEntry::LeafEntry {
                                     min_distance: distance,
-                                    item: item.clone(),
+                                    item,
                                 });
                             }
                         }
@@ -585,26 +593,26 @@ mod tests {
 
     #[test]
     fn test_knn_search_empty_tree() {
-        let items_map = std::collections::HashMap::new();
-        let results = knn_search(None, 116.4, 39.9, 10, &items_map);
+        let geometry_map = std::collections::HashMap::new();
+        let geojson_map = std::collections::HashMap::new();
+        let results = knn_search(None, 116.4, 39.9, 10, &geometry_map, &geojson_map);
         assert_eq!(results.len(), 0);
     }
 
     #[test]
     fn test_knn_search_k_zero() {
-        let items_map = std::collections::HashMap::new();
-        let results = knn_search(None, 116.4, 39.9, 0, &items_map);
+        let geometry_map = std::collections::HashMap::new();
+        let geojson_map = std::collections::HashMap::new();
+        let results = knn_search(None, 116.4, 39.9, 0, &geometry_map, &geojson_map);
         assert_eq!(results.len(), 0);
     }
 
     #[test]
     fn test_knn_search_basic() {
         use crate::rtree::RTree;
-        use std::collections::HashMap;
 
         // Create a tree and insert some points around Beijing (116.4, 39.9)
         let mut tree = RTree::new(4);
-        let mut items_map = HashMap::new();
 
         // Define test points with known distances from query point (116.4, 39.9)
         let test_data = vec![
@@ -620,18 +628,8 @@ mod tests {
                 r#"{{"type":"Feature","properties":{{"id":"{}"}},"geometry":{{"type":"Point","coordinates":[{},{}]}}}}"#,
                 id, lon, lat
             );
-            let geometry = Geometry::Point(geo::Point::new(*lon, *lat));
             
             tree.insert_geojson(id.to_string(), &geojson);
-            
-            items_map.insert(
-                id.to_string(),
-                GeoItem {
-                    id: id.to_string(),
-                    geometry,
-                    geojson,
-                },
-            );
         }
 
         // Search for 3 nearest neighbors to (116.4, 39.9)
@@ -640,7 +638,8 @@ mod tests {
             116.4,
             39.9,
             3,
-            &items_map,
+            &tree.geometry_map,
+            &tree.geojson_map,
         );
 
         // Should return 3 results
@@ -665,10 +664,8 @@ mod tests {
     #[test]
     fn test_knn_search_k_greater_than_items() {
         use crate::rtree::RTree;
-        use std::collections::HashMap;
 
         let mut tree = RTree::new(4);
-        let mut items_map = HashMap::new();
 
         // Insert only 3 items
         for i in 0..3 {
@@ -679,17 +676,8 @@ mod tests {
                 r#"{{"type":"Point","coordinates":[{},{}]}}"#,
                 lon, lat
             );
-            let geometry = Geometry::Point(geo::Point::new(lon, lat));
 
             tree.insert_geojson(id.clone(), &geojson);
-            items_map.insert(
-                id.clone(),
-                GeoItem {
-                    id: id.clone(),
-                    geometry,
-                    geojson,
-                },
-            );
         }
 
         // Request 10 neighbors but only 3 exist
@@ -698,7 +686,8 @@ mod tests {
             116.0,
             39.0,
             10,
-            &items_map,
+            &tree.geometry_map,
+            &tree.geojson_map,
         );
 
         // Should return only 3 results
@@ -708,11 +697,9 @@ mod tests {
     #[test]
     fn test_knn_search_correctness() {
         use crate::rtree::RTree;
-        use std::collections::HashMap;
 
         // Create a grid of points
         let mut tree = RTree::new(4);
-        let mut items_map = HashMap::new();
         let mut all_items = Vec::new();
 
         for x in 0..5 {
@@ -727,13 +714,6 @@ mod tests {
                 let geometry = Geometry::Point(geo::Point::new(lon, lat));
 
                 tree.insert_geojson(id.clone(), &geojson);
-                
-                let item = GeoItem {
-                    id: id.clone(),
-                    geometry: geometry.clone(),
-                    geojson: geojson.clone(),
-                };
-                items_map.insert(id.clone(), item.clone());
                 all_items.push((id, lon, lat, geometry));
             }
         }
@@ -749,7 +729,8 @@ mod tests {
             query_lon,
             query_lat,
             k,
-            &items_map,
+            &tree.geometry_map,
+            &tree.geojson_map,
         );
 
         // Brute force: calculate all distances and sort
@@ -780,12 +761,10 @@ mod tests {
     #[test]
     fn test_knn_performance_comparison() {
         use crate::rtree::RTree;
-        use std::collections::HashMap;
         use std::time::Instant;
 
         // Create a larger dataset for performance testing
         let mut tree = RTree::new(10);
-        let mut items_map = HashMap::new();
         let mut all_items = Vec::new();
 
         let grid_size = 20; // 20x20 = 400 points
@@ -798,16 +777,8 @@ mod tests {
                     r#"{{"type":"Point","coordinates":[{},{}]}}"#,
                     lon, lat
                 );
-                let geometry = Geometry::Point(geo::Point::new(lon, lat));
 
                 tree.insert_geojson(id.clone(), &geojson);
-                
-                let item = GeoItem {
-                    id: id.clone(),
-                    geometry: geometry.clone(),
-                    geojson: geojson.clone(),
-                };
-                items_map.insert(id.clone(), item);
                 all_items.push((lon, lat));
             }
         }
@@ -823,7 +794,8 @@ mod tests {
             query_lon,
             query_lat,
             k,
-            &items_map,
+            &tree.geometry_map,
+            &tree.geojson_map,
         );
         let knn_duration = start.elapsed();
 

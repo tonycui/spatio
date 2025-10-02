@@ -5,7 +5,7 @@ use crate::protocol::parser::RespValue;
 use crate::storage::GeoDatabase;
 use crate::Result;
 
-use super::{CommandType, basic::{PingCommand, HelloCommand, QuitCommand}, set::SetCommand, get::GetCommand, intersects::IntersectsCommand, drop::DropCommand, keys::KeysCommand};
+use super::{CommandType, basic::{PingCommand, HelloCommand, QuitCommand}, set::SetCommand, get::GetCommand, intersects::IntersectsCommand, nearby::NearbyCommand, drop::DropCommand, keys::KeysCommand};
 
 /// 命令注册表，管理所有可用的命令
 pub struct CommandRegistry {
@@ -30,6 +30,7 @@ impl CommandRegistry {
         
         // 注册空间查询命令
         registry.register(CommandType::Intersects(IntersectsCommand::new(Arc::clone(&database))));
+        registry.register(CommandType::Nearby(NearbyCommand::new(Arc::clone(&database))));
         
         // 注册管理命令
         registry.register(CommandType::Drop(DropCommand::new(Arc::clone(&database))));
@@ -107,6 +108,89 @@ mod tests {
         assert!(names.contains(&"PING"));
         assert!(names.contains(&"SET"));
         assert!(names.contains(&"GET"));
-        assert!(names.len() >= 5);  // 至少有 5 个命令
+        assert!(names.contains(&"NEARBY"));
+        assert!(names.len() >= 6);  // 至少有 6 个命令
+    }
+
+    #[tokio::test]
+    async fn test_nearby_command_integration() {
+        use crate::protocol::parser::RespValue;
+        use serde_json::json;
+        
+        let database = Arc::new(GeoDatabase::new());
+        let registry = CommandRegistry::new(Arc::clone(&database));
+        
+        // 1. 插入测试数据
+        let point1 = json!({"type": "Point", "coordinates": [116.4, 39.9]});
+        let point2 = json!({"type": "Point", "coordinates": [116.5, 40.0]});
+        let point3 = json!({"type": "Point", "coordinates": [116.3, 39.8]});
+        
+        let set_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v1".to_string())),
+            RespValue::BulkString(Some(point1.to_string())),
+        ];
+        registry.execute("SET", &set_args).await.unwrap();
+        
+        let set_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v2".to_string())),
+            RespValue::BulkString(Some(point2.to_string())),
+        ];
+        registry.execute("SET", &set_args).await.unwrap();
+        
+        let set_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("v3".to_string())),
+            RespValue::BulkString(Some(point3.to_string())),
+        ];
+        registry.execute("SET", &set_args).await.unwrap();
+        
+        // 2. 执行 NEARBY 查询
+        let nearby_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("2".to_string())),
+        ];
+        
+        let result = registry.execute("NEARBY", &nearby_args).await.unwrap();
+        
+        // 3. 验证结果
+        println!("Integration test result:\n{}", result);
+        
+        // 应该返回 2 个结果
+        assert!(result.starts_with("*2"));  // 数组有 2 个元素
+        
+        // 结果应该包含点的坐标
+        assert!(result.contains("116.4"));
+        assert!(result.contains("39.9"));
+        
+        // 结果应该包含距离信息
+        assert!(result.contains("0.00")); // v1 的距离应该是 0（完全匹配）
+    }
+
+    #[tokio::test]
+    async fn test_nearby_command_with_registry() {
+        use crate::protocol::parser::RespValue;
+        
+        let database = Arc::new(GeoDatabase::new());
+        let registry = CommandRegistry::new(database);
+        
+        // 测试 NEARBY 命令是否注册
+        assert!(registry.has_command("NEARBY"));
+        assert!(registry.has_command("nearby"));  // 大小写不敏感
+        
+        // 测试参数错误的情况
+        let invalid_args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+        ];
+        
+        let result = registry.execute("NEARBY", &invalid_args).await.unwrap();
+        assert!(result.contains("ERR"));
+        assert!(result.contains("wrong number of arguments"));
     }
 }

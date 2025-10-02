@@ -184,6 +184,75 @@ impl<'a> ArgumentParser<'a> {
             collection_id: collection_id.to_string(),
         })
     }
+
+    /// 解析 NEARBY 命令的参数
+    /// 语法: NEARBY collection POINT lon lat COUNT k
+    /// 
+    /// # Examples
+    /// 
+    /// ```ignore
+    /// NEARBY fleet POINT 116.4 39.9 COUNT 10
+    /// ```
+    pub fn parse_nearby_args(&self) -> std::result::Result<NearbyArgs, String> {
+        // 至少需要 6 个参数: collection, POINT, lon, lat, COUNT, k
+        if self.args.len() < 6 {
+            return Err(format!(
+                "ERR wrong number of arguments for 'NEARBY' command. Expected at least 6, got {}. Usage: NEARBY collection POINT lon lat COUNT k",
+                self.args.len()
+            ));
+        }
+
+        // 解析 collection ID
+        let collection_id = self.get_string(0, "collection ID")?;
+
+        // 验证 POINT 关键字
+        let point_keyword = self.get_string(1, "POINT keyword")?;
+        if point_keyword.to_uppercase() != "POINT" {
+            return Err(format!(
+                "ERR invalid syntax: expected 'POINT', got '{}'",
+                point_keyword
+            ));
+        }
+
+        // 解析经度和纬度
+        let lon_str = self.get_string(2, "longitude")?;
+        let lat_str = self.get_string(3, "latitude")?;
+
+        let query_lon: f64 = lon_str.parse()
+            .map_err(|_| format!("ERR invalid longitude: expected number, got '{}'", lon_str))?;
+        let query_lat: f64 = lat_str.parse()
+            .map_err(|_| format!("ERR invalid latitude: expected number, got '{}'", lat_str))?;
+
+        // 验证经纬度范围
+        if query_lon < -180.0 || query_lon > 180.0 {
+            return Err(format!("ERR invalid longitude: must be between -180 and 180, got {}", query_lon));
+        }
+        if query_lat < -90.0 || query_lat > 90.0 {
+            return Err(format!("ERR invalid latitude: must be between -90 and 90, got {}", query_lat));
+        }
+
+        // 验证 COUNT 关键字
+        let count_keyword = self.get_string(4, "COUNT keyword")?;
+        if count_keyword.to_uppercase() != "COUNT" {
+            return Err(format!(
+                "ERR invalid syntax: expected 'COUNT', got '{}'",
+                count_keyword
+            ));
+        }
+
+        // 解析 k（返回结果数量）
+        let k = self.get_integer(5, "count")?;
+        if k == 0 {
+            return Err("ERR count must be greater than 0".to_string());
+        }
+
+        Ok(NearbyArgs {
+            collection_id: collection_id.to_string(),
+            query_lon,
+            query_lat,
+            k,
+        })
+    }
     
 }
 
@@ -215,6 +284,15 @@ pub struct IntersectsArgs {
 #[derive(Debug)]
 pub struct DropArgs {
     pub collection_id: String,
+}
+
+/// NEARBY 命令的解析结果
+#[derive(Debug)]
+pub struct NearbyArgs {
+    pub collection_id: String,
+    pub query_lon: f64,
+    pub query_lat: f64,
+    pub k: usize,
 }
 
 #[cfg(test)]
@@ -411,5 +489,81 @@ mod tests {
         
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid GeoJSON geometry"));
+    }
+
+    #[test]
+    fn test_parse_nearby_args_success() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("10".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_ok());
+        let parsed = result.unwrap();
+        assert_eq!(parsed.collection_id, "fleet");
+        assert_eq!(parsed.query_lon, 116.4);
+        assert_eq!(parsed.query_lat, 39.9);
+        assert_eq!(parsed.k, 10);
+    }
+
+    #[test]
+    fn test_parse_nearby_args_invalid_longitude() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("200.0".to_string())), // 无效经度
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("10".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("invalid longitude"));
+    }
+
+    #[test]
+    fn test_parse_nearby_args_missing_point_keyword() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("NOTPOINT".to_string())), // 错误关键字
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("10".to_string())),
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("expected 'POINT'"));
+    }
+
+    #[test]
+    fn test_parse_nearby_args_zero_count() {
+        let args = vec![
+            RespValue::BulkString(Some("fleet".to_string())),
+            RespValue::BulkString(Some("POINT".to_string())),
+            RespValue::BulkString(Some("116.4".to_string())),
+            RespValue::BulkString(Some("39.9".to_string())),
+            RespValue::BulkString(Some("COUNT".to_string())),
+            RespValue::BulkString(Some("0".to_string())), // k = 0
+        ];
+        
+        let parser = ArgumentParser::new(&args, "NEARBY");
+        let result = parser.parse_nearby_args();
+        
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("count must be greater than 0"));
     }
 }

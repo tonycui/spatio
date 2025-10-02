@@ -97,6 +97,53 @@ impl RTree {
             }
         }
     }
+
+    /// 查找最近的 k 个对象（KNN 查询）
+    /// 
+    /// 使用 R-tree 的 KNN 算法，通过优先队列高效地查找距离查询点最近的 k 个对象。
+    /// 
+    /// # Arguments
+    /// * `query_lon` - 查询点的经度
+    /// * `query_lat` - 查询点的纬度
+    /// * `k` - 返回最近的 k 个对象
+    /// 
+    /// # Returns
+    /// 
+    /// 返回一个元组数组 `Vec<(GeoItem, f64)>`，其中：
+    /// - `GeoItem` - 查询到的地理对象
+    /// - `f64` - 该对象到查询点的距离（米，使用 Haversine 公式计算）
+    /// 
+    /// 结果按距离升序排列（最近的在前）
+    /// 
+    /// # Example
+    /// 
+    /// ```ignore
+    /// let tree = RTree::new(10);
+    /// // ... insert some data ...
+    /// let results = tree.nearby(116.4, 39.9, 10); // 查找北京附近最近的10个对象
+    /// for (item, distance) in results {
+    ///     println!("Found {} at distance {} meters", item.id, distance);
+    /// }
+    /// ```
+    pub fn nearby(&self, query_lon: f64, query_lat: f64, k: usize) -> Vec<(GeoItem, f64)> {
+        use super::knn::knn_search;
+
+        // 直接传递 geometry_map 和 geojson_map 的引用，避免复制整个数据集
+        let knn_results = knn_search(
+            self.get_root(),
+            query_lon,
+            query_lat,
+            k,
+            &self.geometry_map,
+            &self.geojson_map,
+        );
+
+        // 转换结果为 (GeoItem, distance) 元组
+        knn_results
+            .into_iter()
+            .map(|result| (result.item, result.distance))
+            .collect()
+    }
 }
 
 #[cfg(test)]

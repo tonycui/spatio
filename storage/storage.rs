@@ -153,6 +153,39 @@ impl GeoDatabase {
 
         Ok(search_results)
     }
+
+    /// 查找最近的 k 个对象（KNN 查询）
+    /// 
+    /// # Arguments
+    /// * `collection_id` - Collection 名称
+    /// * `query_lon` - 查询点的经度
+    /// * `query_lat` - 查询点的纬度
+    /// * `k` - 返回最近的 k 个对象
+    /// 
+    /// # Returns
+    /// 
+    /// 返回一个元组数组 `Vec<(GeoItem, f64)>`，其中：
+    /// - `GeoItem` - 查询到的地理对象
+    /// - `f64` - 该对象到查询点的距离（米）
+    /// 
+    /// 结果按距离升序排列（最近的在前）
+    pub async fn nearby(&self, collection_id: &str, query_lon: f64, query_lat: f64, k: usize) -> Result<Vec<(GeoItem, f64)>> {
+        // 1. 获取 collection
+        let collections = self.collections.read().await;
+        let collection = match collections.get(collection_id) {
+            Some(coll) => coll.clone(),
+            None => return Ok(Vec::new()), // collection 不存在，返回空结果
+        };
+        drop(collections); // 早释放外层锁
+
+        // 2. 获取 collection 数据的读锁
+        let data = collection.read().await;
+
+        // 3. 调用 KNN 算法
+        let knn_results = data.nearby(query_lon, query_lat, k);
+
+        Ok(knn_results)
+    }
 }
 
 /// 数据库统计信息

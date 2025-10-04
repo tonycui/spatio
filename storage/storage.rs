@@ -78,6 +78,7 @@ impl GeoDatabase {
     }
 
     /// 异步从指定 Collection 删除一个 GeoJSON 对象
+    /// 返回 true 表示确实删除了一个存在的 item，false 表示 item 不存在
     pub async fn delete(&self, collection_id: &str, item_id: &str) -> Result<bool> {
         let collections = self.collections.read().await;
         let collection = match collections.get(collection_id) {
@@ -88,10 +89,16 @@ impl GeoDatabase {
 
         let mut rtree = collection.write().await;
         
-        // 原子删除操作
-        rtree.delete(item_id);
+        // 先检查 item 是否存在
+        let exists = rtree.get(item_id).is_some();
         
-        Ok(true)
+        if exists {
+            // 删除操作（rtree.delete 是幂等的，总是返回 true）
+            rtree.delete(item_id);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     /// 异步获取所有 Collection 的名称

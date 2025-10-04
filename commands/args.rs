@@ -104,6 +104,19 @@ impl<'a> ArgumentParser<'a> {
         })
     }
 
+    /// 解析 DELETE 命令的参数
+    pub fn parse_delete_args(&self) -> std::result::Result<DeleteArgs, String> {
+        self.check_arg_count(2)?;
+        
+        let collection_id = self.get_string(0, "collection ID")?;
+        let item_id = self.get_string(1, "item ID")?;
+        
+        Ok(DeleteArgs {
+            collection_id: collection_id.to_string(),
+            item_id: item_id.to_string(),
+        })
+    }
+
     /// 解析 INTERSECTS 命令的参数
     /// 语法: INTERSECTS collection geojson [WITHIN true|false] [LIMIT n]
     pub fn parse_intersects_args(&self) -> std::result::Result<IntersectsArgs, String> {
@@ -310,6 +323,13 @@ pub struct SetArgs {
 /// GET 命令的解析结果
 #[derive(Debug)]
 pub struct GetArgs {
+    pub collection_id: String,
+    pub item_id: String,
+}
+
+/// DELETE 命令的解析结果
+#[derive(Debug)]
+pub struct DeleteArgs {
     pub collection_id: String,
     pub item_id: String,
 }

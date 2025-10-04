@@ -1,6 +1,7 @@
 pub mod basic;
 pub mod set;
 pub mod get;
+pub mod delete;
 pub mod intersects;
 pub mod nearby;
 pub mod drop;
@@ -14,13 +15,14 @@ use crate::Result;
 use basic::{PingCommand, HelloCommand, QuitCommand};
 use set::SetCommand;
 use get::GetCommand;
+use delete::DeleteCommand;
 use intersects::IntersectsCommand;
 use nearby::NearbyCommand;
 use drop::DropCommand;
 use keys::KeysCommand;
 
 // 重新导出常用的类型
-pub use args::{ArgumentParser, SetArgs, GetArgs, DropArgs, NearbyArgs};
+pub use args::{ArgumentParser, SetArgs, GetArgs, DeleteArgs, DropArgs, NearbyArgs};
 pub use intersects::IntersectsArgs;
 pub use registry::CommandRegistry;
 
@@ -35,6 +37,7 @@ pub enum CommandType {
     Quit(QuitCommand),
     Set(SetCommand),
     Get(GetCommand),
+    Delete(DeleteCommand),
     Intersects(IntersectsCommand),
     Nearby(NearbyCommand),
     Drop(DropCommand),
@@ -49,6 +52,7 @@ impl CommandType {
             CommandType::Quit(cmd) => cmd.name(),
             CommandType::Set(cmd) => cmd.name(),
             CommandType::Get(cmd) => cmd.name(),
+            CommandType::Delete(cmd) => cmd.name(),
             CommandType::Intersects(cmd) => cmd.name(),
             CommandType::Nearby(cmd) => cmd.name(),
             CommandType::Drop(cmd) => cmd.name(),
@@ -63,6 +67,7 @@ impl CommandType {
             CommandType::Quit(cmd) => cmd.execute(args).await,
             CommandType::Set(cmd) => cmd.execute(args).await,
             CommandType::Get(cmd) => cmd.execute(args).await,
+            CommandType::Delete(cmd) => cmd.execute(args).await,
             CommandType::Intersects(cmd) => cmd.execute(args).await,
             CommandType::Nearby(cmd) => cmd.execute(args).await,
             CommandType::Drop(cmd) => cmd.execute(args).await,

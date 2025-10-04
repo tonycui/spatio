@@ -6,6 +6,7 @@ use super::utils::geometry_to_bbox;
 /// R-tree删除算法实现
 impl RTree {
     /// 删除指定的数据条目 - 遵循论文Algorithm Delete
+    /// 返回 true 表示操作成功（幂等：不存在也视为成功）
     pub fn delete(&mut self, data: &str)  -> bool {
          // 直接在 if let 中获取几何体，如果不存在就直接返回
         let Some(geometry) = self.geometry_map.get(data) else {

@@ -4,3 +4,5 @@
 **/.DS_Store
 .vscode
 spatio-workspace.code-workspace
+DOCKER_QUICK_START.md
+DOCKER_SETUP_COMPLETE.md

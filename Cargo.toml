@@ -18,10 +18,6 @@ path = "bin/spatio-server.rs"
 name = "spatio-cli"
 path = "bin/spatio-cli.rs"
 
-[[bin]]
-name = "test-resp"
-path = "bin/test-resp.rs"
-
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 tracing = "0.1"

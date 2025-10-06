@@ -74,6 +74,8 @@ Spatio is a high-performance geospatial database developed in Rust, designed for
 > Status: Not started  
 > Planned completion: December 2025
 
+- [ ] Enhancement
+  - [ ] gracefully shutdown, in both cli and docker
 - [ ] Master-slave replication
   - [ ] Asynchronous replication
 - [ ] Sharding support

@@ -2,9 +2,8 @@
 
 > 🌍 A modern geospatial database built with Rust
 
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
-
-## 📄 License
+[![Rust Version](https://img.shields.io/badge/rust-1.89-orange.svg)](https://www.rust-lang.org)
+[![Docker](https://img.shields.io/docker/v/spaito/spatio?label=docker)](https://hub.docker.com/r/spaito/spatio)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)]()
 
@@ -21,19 +20,34 @@ Spatio is a high-performance geospatial indexing service based on RTree, designe
 
 ## 🚀 Quick Start
 
-### Installation
+### Docker (Recommended) 🐳
+
+The easiest way to run Spatio:
 
 ```bash
-# Build from source
-git clone https://github.com/tonycui/spatio.git
-cd spatio
-cargo build --release
+# Pull and run
+docker pull spaito/spatio
+docker run -p 9851:9851 spaito/spatio
+
+# Or use docker-compose
+docker-compose up -d
 ```
 
-### Start Server
+### From Source
+
+Requirements:
+- Rust 1.75+ (developed with 1.89)
+- Cargo
 
 ```bash
-# Start Spatio server
+# Clone the repository
+git clone https://github.com/tonycui/spatio.git
+cd spatio
+
+# Build
+cargo build --release
+
+# Run server
 cargo run --bin spatio-server
 # Server will start on 127.0.0.1:9851
 ```
@@ -50,7 +64,54 @@ cargo run --bin spatio-cli -- SET fleet truck1 '{"type":"Point","coordinates":[1
 cargo run --bin spatio-cli -- GET fleet truck1
 ```
 
-## 📖 Basic Usage
+## � Docker Usage
+
+### Environment Variables
+
+- `RUST_LOG`: Log level (default: `info`, options: `trace`, `debug`, `info`, `warn`, `error`)
+- `SPATIO_HOST`: Listen address (default: `0.0.0.0`)
+- `SPATIO_PORT`: Listen port (default: `9851`)
+
+### Data Persistence
+
+Use volume mounts to persist data:
+
+```bash
+docker run -p 9851:9851 -v spatio-data:/data spaito/spatio
+```
+
+### Docker Compose Example
+
+```yaml
+version: '3.8'
+services:
+  spatio:
+    image: spaito/spatio:latest
+    ports:
+      - "9851:9851"
+    volumes:
+      - spatio-data:/data
+    environment:
+      - RUST_LOG=info
+
+volumes:
+  spatio-data:
+```
+
+### Building Docker Image
+
+```bash
+# Build the image
+docker build -t spaito/spatio:latest .
+
+# Run it
+docker run -p 9851:9851 spaito/spatio:latest
+
+# Push to Docker Hub
+docker push spaito/spatio:latest
+```
+
+## �📖 Basic Usage
 
 ### Store Geospatial Data
 
@@ -72,6 +133,12 @@ SET boundaries beijing {
 ### Query Data
 
 ```bash
+# Get a specific item
+GET fleet truck1
+
+# Delete an item
+DELETE fleet truck1
+
 # Insert an irregular polygon (representing a city district)
 SET districts id_1 '{"type":"Feature","properties":{"id":"id_1"},"geometry":{"type":"Polygon","coordinates":[[[2.5,1.0],[6.2,0.8],[8.1,3.5],[7.8,6.9],[5.2,8.1],[2.1,7.3],[0.9,4.2],[2.5,1.0]]]}}'
 
@@ -90,6 +157,12 @@ NEARBY fleet POINT 116.4 39.9 RADIUS 1000
 
 # Find 5 nearest vehicles within 2000 meters
 NEARBY fleet POINT 116.4 39.9 COUNT 5 RADIUS 2000
+
+# List all collections
+KEYS
+
+# Drop a collection
+DROP fleet
 
 # Test connection
 PING

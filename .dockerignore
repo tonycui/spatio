@@ -1,0 +1,89 @@
+# Rust 构建产物
+target/
+**/*.rs.bk
+*.pdb
+
+# Cargo 锁文件在生产环境中保留，以确保可重现构建
+# 如果是库项目，可以排除 Cargo.lock
+# Cargo.lock
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.iml
+
+# 文档
+*.md
+!README.md
+docs/
+examples/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+
+# Docker 相关
+Dockerfile
+Dockerfile.*
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# 测试和基准测试
+tests/
+benches/
+benchmark/
+
+# 临时文件和日志
+*.log
+*.tmp
+*.temp
+.env
+.env.*
+!.env.example
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+
+# Node.js (如果有前端)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Python (如果有脚本)
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+.venv/
+*.egg-info/
+
+# 备份文件
+*.bak
+*.backup
+*~
+
+# 工作空间文件
+*.code-workspace
+spatio-workspace.code-workspace
+
+# 数据文件（如果不需要打包到镜像中）
+data/
+*.db
+*.sqlite
+*.sqlite3

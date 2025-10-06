@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  spatio:
+    image: spaito/spatio:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        RUST_VERSION: "1.89"
+    container_name: spatio
+    ports:
+      - "9851:9851"
+    volumes:
+      # 持久化数据
+      - spatio-data:/data
+      # 可选：挂载配置文件
+      # - ./config:/config:ro
+    environment:
+      # 日志级别：trace, debug, info, warn, error
+      - RUST_LOG=info
+      # 服务器配置
+      - SPATIO_HOST=0.0.0.0
+      - SPATIO_PORT=9851
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "echo PING | nc localhost 9851 || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # 资源限制（可选，根据需要调整）
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    networks:
+      - spatio-network
+    labels:
+      - "com.spatio.description=Spatio geospatial database"
+      - "com.spatio.version=0.1.0"
+
+  # 可选：添加一个客户端容器用于测试
+  spatio-cli:
+    image: spaito/spatio:latest
+    container_name: spatio-cli
+    entrypoint: ["tail", "-f", "/dev/null"]  # 保持容器运行
+    depends_on:
+      - spatio
+    networks:
+      - spatio-network
+    profiles:
+      - cli  # 使用 profile，默认不启动
+    labels:
+      - "com.spatio.description=Spatio CLI client"
+
+volumes:
+  spatio-data:
+    driver: local
+    labels:
+      - "com.spatio.description=Spatio data volume"
+
+networks:
+  spatio-network:
+    driver: bridge
+    labels:
+      - "com.spatio.description=Spatio network"

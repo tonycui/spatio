@@ -1,13 +1,12 @@
-use geo::{Geometry};
-use geojson::{GeoJson};
+use geo::Geometry;
+use geojson::GeoJson;
 
-/// 将 serde_json::Value 转换为 geo::Geometry
+// OLD CODE - NOT USED:
 // pub fn geojson_to_geometry2(geojson: &serde_json::Value) -> Result<Geometry<f64>> {
 //     // 1. 将 serde_json::Value 转换为 geojson::GeoJson
 //     let geojson_str = geojson.to_string();
 //     let parsed: GeoJson = geojson_str.parse()
 //         .map_err(|e| format!("Invalid GeoJSON: {}", e))?;
-    
 //     // 2. 转换为 geo::Geometry
 //     match parsed {
 //         GeoJson::Geometry(geom) => {
@@ -67,7 +66,7 @@ pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f
 //             if coords.is_empty() {
 //                 return Err("Polygon must have at least one ring".into());
 //             }
-            
+
 //             // 外环
 //             let exterior: LineString<f64> = coords[0].iter()
 //                 .map(|coord| {
@@ -78,7 +77,7 @@ pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f
 //                     }
 //                 })
 //                 .collect();
-            
+
 //             // 内环（如果有的话）
 //             let interiors: Vec<LineString<f64>> = coords[1..].iter()
 //                 .map(|ring| ring.iter()
@@ -91,7 +90,7 @@ pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f
 //                     })
 //                     .collect())
 //                 .collect();
-            
+
 //             Ok(Geometry::Polygon(Polygon::new(exterior, interiors)))
 //         }
 //         GeoJsonValue::MultiPoint(coords) => {
@@ -144,7 +143,7 @@ pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f
 //                                 }
 //                             })
 //                             .collect();
-                        
+
 //                         let interiors: Vec<LineString<f64>> = poly_coords[1..].iter()
 //                             .map(|ring| ring.iter()
 //                                 .map(|coord| {
@@ -156,7 +155,7 @@ pub(crate) fn geojson_to_geometry(geojson_str: &str) -> crate::Result<Geometry<f
 //                                 })
 //                                 .collect())
 //                             .collect();
-                        
+
 //                         Polygon::new(exterior, interiors)
 //                     }
 //                 })
@@ -175,11 +174,10 @@ pub fn geometries_intersect(geom1: &Geometry<f64>, geom2: &Geometry<f64>) -> boo
     geom1.intersects(geom2)
 }
 
-
 /// 将 geo::Geometry 转换为 serde_json::Value (GeoJSON)
 pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
     use serde_json::json;
-    
+
     match geometry {
         Geometry::Point(point) => {
             json!({
@@ -188,9 +186,7 @@ pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
             })
         }
         Geometry::LineString(line) => {
-            let coords: Vec<Vec<f64>> = line.coords()
-                .map(|coord| vec![coord.x, coord.y])
-                .collect();
+            let coords: Vec<Vec<f64>> = line.coords().map(|coord| vec![coord.x, coord.y]).collect();
             json!({
                 "type": "LineString",
                 "coordinates": coords
@@ -198,28 +194,32 @@ pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
         }
         Geometry::Polygon(polygon) => {
             let mut rings: Vec<Vec<Vec<f64>>> = Vec::new();
-            
+
             // 外环
-            let exterior: Vec<Vec<f64>> = polygon.exterior().coords()
+            let exterior: Vec<Vec<f64>> = polygon
+                .exterior()
+                .coords()
                 .map(|coord| vec![coord.x, coord.y])
                 .collect();
             rings.push(exterior);
-            
+
             // 内环
             for interior in polygon.interiors() {
-                let interior_coords: Vec<Vec<f64>> = interior.coords()
+                let interior_coords: Vec<Vec<f64>> = interior
+                    .coords()
                     .map(|coord| vec![coord.x, coord.y])
                     .collect();
                 rings.push(interior_coords);
             }
-            
+
             json!({
                 "type": "Polygon",
                 "coordinates": rings
             })
         }
         Geometry::MultiPoint(multi_point) => {
-            let coords: Vec<Vec<f64>> = multi_point.iter()
+            let coords: Vec<Vec<f64>> = multi_point
+                .iter()
                 .map(|point| vec![point.x(), point.y()])
                 .collect();
             json!({
@@ -228,12 +228,9 @@ pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
             })
         }
         Geometry::MultiLineString(multi_line) => {
-            let coords: Vec<Vec<Vec<f64>>> = multi_line.iter()
-                .map(|line| {
-                    line.coords()
-                        .map(|coord| vec![coord.x, coord.y])
-                        .collect()
-                })
+            let coords: Vec<Vec<Vec<f64>>> = multi_line
+                .iter()
+                .map(|line| line.coords().map(|coord| vec![coord.x, coord.y]).collect())
                 .collect();
             json!({
                 "type": "MultiLineString",
@@ -241,24 +238,28 @@ pub fn geometry_to_geojson(geometry: &Geometry<f64>) -> serde_json::Value {
             })
         }
         Geometry::MultiPolygon(multi_polygon) => {
-            let coords: Vec<Vec<Vec<Vec<f64>>>> = multi_polygon.iter()
+            let coords: Vec<Vec<Vec<Vec<f64>>>> = multi_polygon
+                .iter()
                 .map(|polygon| {
                     let mut rings: Vec<Vec<Vec<f64>>> = Vec::new();
-                    
+
                     // 外环
-                    let exterior: Vec<Vec<f64>> = polygon.exterior().coords()
+                    let exterior: Vec<Vec<f64>> = polygon
+                        .exterior()
+                        .coords()
                         .map(|coord| vec![coord.x, coord.y])
                         .collect();
                     rings.push(exterior);
-                    
+
                     // 内环
                     for interior in polygon.interiors() {
-                        let interior_coords: Vec<Vec<f64>> = interior.coords()
+                        let interior_coords: Vec<Vec<f64>> = interior
+                            .coords()
                             .map(|coord| vec![coord.x, coord.y])
                             .collect();
                         rings.push(interior_coords);
                     }
-                    
+
                     rings
                 })
                 .collect();
@@ -288,7 +289,7 @@ mod tests {
             "type": "Point",
             "coordinates": [0.0, 0.0]
         });
-        
+
         let geometry = geojson_to_geometry(&point_json.to_string()).unwrap();
         match geometry {
             Geometry::Point(p) => {
@@ -305,7 +306,7 @@ mod tests {
             "type": "LineString",
             "coordinates": [[0.0, 0.0], [1.0, 1.0]]
         });
-        
+
         let geometry = geojson_to_geometry(&linestring_json.to_string()).unwrap();
         match geometry {
             Geometry::LineString(line) => {
@@ -327,7 +328,7 @@ mod tests {
                 [0.0, 0.0]
             ]]
         });
-        
+
         let geometry = geojson_to_geometry(&polygon_json.to_string()).unwrap();
         match geometry {
             Geometry::Polygon(poly) => {
@@ -343,7 +344,7 @@ mod tests {
             "type": "Point",
             "coordinates": [0.5, 0.5]
         });
-        
+
         let polygon_json = json!({
             "type": "Polygon",
             "coordinates": [[
@@ -354,10 +355,10 @@ mod tests {
                 [0.0, 0.0]
             ]]
         });
-        
+
         let point_geom = geojson_to_geometry(&point_json.to_string()).unwrap();
         let polygon_geom = geojson_to_geometry(&polygon_json.to_string()).unwrap();
-        
+
         assert!(geometries_intersect(&point_geom, &polygon_geom));
     }
 
@@ -367,7 +368,7 @@ mod tests {
             "type": "Point",
             "coordinates": [2.0, 2.0]
         });
-        
+
         let polygon_json = json!({
             "type": "Polygon",
             "coordinates": [[
@@ -378,10 +379,10 @@ mod tests {
                 [0.0, 0.0]
             ]]
         });
-        
+
         let point_geom = geojson_to_geometry(&point_json.to_string()).unwrap();
         let polygon_geom = geojson_to_geometry(&polygon_json.to_string()).unwrap();
-        
+
         assert!(!geometries_intersect(&point_geom, &polygon_geom));
     }
 
@@ -391,9 +392,8 @@ mod tests {
             "type": "Point",
             "coordinates": [0.0] // 缺少 y 坐标
         });
-        
+
         let result = geojson_to_geometry(&invalid_json.to_string());
         assert!(result.is_err());
     }
-
 }

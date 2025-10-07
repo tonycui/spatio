@@ -1,18 +1,18 @@
 pub mod client;
 pub mod commands;
 pub mod protocol;
+pub mod rtree;
 pub mod server;
 pub mod storage;
-pub mod rtree;
 
 use std::error::Error;
 
 // 重新导出主要的公共接口
-pub use rtree::{Rectangle, Node, Entry, RTree, GeoItem};
+pub use rtree::{Entry, GeoItem, Node, RTree, Rectangle};
 
 // 重新导出常用类型，便于二进制文件使用
+pub use client::{CliArgs, ClientConnection, OutputFormatter};
 pub use server::TcpServer;
-pub use client::{ClientConnection, CliArgs, OutputFormatter};
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 

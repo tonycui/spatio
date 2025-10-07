@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use crate::commands::Command;
 use crate::commands::args::ArgumentParser;
-use crate::protocol::{RespResponse, parser::RespValue};
+use crate::commands::Command;
+use crate::protocol::{parser::RespValue, RespResponse};
 use crate::storage::GeoDatabase;
 use crate::Result;
+use std::sync::Arc;
 
 pub struct SetCommand {
     database: Arc<GeoDatabase>,
@@ -20,12 +20,15 @@ impl Command for SetCommand {
         "SET"
     }
 
-    fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
+    fn execute(
+        &self,
+        args: &[RespValue],
+    ) -> impl std::future::Future<Output = Result<String>> + Send {
         let database = Arc::clone(&self.database);
-        
+
         // 同步解析参数（不需要在 async 块中）
         let parse_result = ArgumentParser::new(args, "SET").parse_set_args();
-        
+
         async move {
             // 检查参数解析结果
             let parsed_args = match parse_result {
@@ -34,9 +37,16 @@ impl Command for SetCommand {
                     return Ok(RespResponse::error(&err_msg));
                 }
             };
-            
+
             // 只有 I/O 操作需要异步
-            match database.set(&parsed_args.collection_id, &parsed_args.item_id, &parsed_args.geojson).await {
+            match database
+                .set(
+                    &parsed_args.collection_id,
+                    &parsed_args.item_id,
+                    &parsed_args.geojson,
+                )
+                .await
+            {
                 Ok(_) => Ok(RespResponse::simple_string("OK")),
                 Err(e) => Ok(RespResponse::error(&format!("ERR failed to store: {}", e))),
             }
@@ -99,7 +109,9 @@ mod tests {
         let args = vec![
             RespValue::BulkString(Some("fleet".to_string())),
             RespValue::BulkString(Some("truck1".to_string())),
-            RespValue::BulkString(Some(r#"{"type": "Point", "coordinates": [1.0, 2.0]}"#.to_string())),
+            RespValue::BulkString(Some(
+                r#"{"type": "Point", "coordinates": [1.0, 2.0]}"#.to_string(),
+            )),
         ];
 
         let result = cmd.execute(&args).await.unwrap();

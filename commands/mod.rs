@@ -1,34 +1,37 @@
-pub mod basic;
-pub mod set;
-pub mod get;
-pub mod delete;
-pub mod intersects;
-pub mod nearby;
-pub mod drop;
-pub mod keys;
 pub mod args;
+pub mod basic;
+pub mod delete;
+pub mod drop;
+pub mod get;
+pub mod intersects;
+pub mod keys;
+pub mod nearby;
 pub mod registry;
+pub mod set;
 
 use crate::protocol::parser::RespValue;
 use crate::Result;
 
-use basic::{PingCommand, HelloCommand, QuitCommand};
-use set::SetCommand;
-use get::GetCommand;
+use basic::{HelloCommand, PingCommand, QuitCommand};
 use delete::DeleteCommand;
-use intersects::IntersectsCommand;
-use nearby::NearbyCommand;
 use drop::DropCommand;
+use get::GetCommand;
+use intersects::IntersectsCommand;
 use keys::KeysCommand;
+use nearby::NearbyCommand;
+use set::SetCommand;
 
 // 重新导出常用的类型
-pub use args::{ArgumentParser, SetArgs, GetArgs, DeleteArgs, DropArgs, NearbyArgs};
+pub use args::{ArgumentParser, DeleteArgs, DropArgs, GetArgs, NearbyArgs, SetArgs};
 pub use intersects::IntersectsArgs;
 pub use registry::CommandRegistry;
 
 pub trait Command {
     fn name(&self) -> &'static str;
-    fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send;
+    fn execute(
+        &self,
+        args: &[RespValue],
+    ) -> impl std::future::Future<Output = Result<String>> + Send;
 }
 
 pub enum CommandType {

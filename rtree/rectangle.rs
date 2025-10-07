@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 /// 矩形边界框 - 用于表示R-tree中的最小边界矩形(MBR)
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Rectangle {
-    pub min: [f64; 2],  // [x_min, y_min]
-    pub max: [f64; 2],  // [x_max, y_max]
+    pub min: [f64; 2], // [x_min, y_min]
+    pub max: [f64; 2], // [x_max, y_max]
 }
 
 impl Rectangle {
@@ -38,33 +38,30 @@ impl Rectangle {
     /// 计算两个矩形的并集MBR
     pub fn union(&self, other: &Rectangle) -> Rectangle {
         Rectangle {
-            min: [
-                self.min[0].min(other.min[0]),
-                self.min[1].min(other.min[1])
-            ],
-            max: [
-                self.max[0].max(other.max[0]),
-                self.max[1].max(other.max[1])
-            ],
+            min: [self.min[0].min(other.min[0]), self.min[1].min(other.min[1])],
+            max: [self.max[0].max(other.max[0]), self.max[1].max(other.max[1])],
         }
     }
 
     /// 判断两个矩形是否相交
     pub fn intersects(&self, other: &Rectangle) -> bool {
-        self.min[0] <= other.max[0] && self.max[0] >= other.min[0] &&
-        self.min[1] <= other.max[1] && self.max[1] >= other.min[1]
+        self.min[0] <= other.max[0]
+            && self.max[0] >= other.min[0]
+            && self.min[1] <= other.max[1]
+            && self.max[1] >= other.min[1]
     }
 
     /// 判断当前矩形是否包含另一个矩形
     pub fn contains(&self, other: &Rectangle) -> bool {
-        self.min[0] <= other.min[0] && self.min[1] <= other.min[1] &&
-        self.max[0] >= other.max[0] && self.max[1] >= other.max[1]
+        self.min[0] <= other.min[0]
+            && self.min[1] <= other.min[1]
+            && self.max[0] >= other.max[0]
+            && self.max[1] >= other.max[1]
     }
 
     /// 判断当前矩形是否包含一个点
     pub fn contains_point(&self, x: f64, y: f64) -> bool {
-        self.min[0] <= x && x <= self.max[0] &&
-        self.min[1] <= y && y <= self.max[1]
+        self.min[0] <= x && x <= self.max[0] && self.min[1] <= y && y <= self.max[1]
     }
 
     /// 计算扩大到包含另一个矩形所需的面积增量
@@ -77,10 +74,10 @@ impl Rectangle {
         if !self.intersects(other) {
             return 0.0;
         }
-        
+
         let x_overlap = (self.max[0].min(other.max[0])) - (self.min[0].max(other.min[0]));
         let y_overlap = (self.max[1].min(other.max[1])) - (self.min[1].max(other.min[1]));
-        
+
         x_overlap * y_overlap
     }
 
@@ -133,7 +130,7 @@ mod tests {
         let rect1 = Rectangle::new(0.0, 0.0, 5.0, 5.0);
         let rect2 = Rectangle::new(3.0, 3.0, 8.0, 8.0);
         let rect3 = Rectangle::new(10.0, 10.0, 15.0, 15.0);
-        
+
         assert!(rect1.intersects(&rect2));
         assert!(!rect1.intersects(&rect3));
     }
@@ -143,7 +140,7 @@ mod tests {
         let rect1 = Rectangle::new(0.0, 0.0, 10.0, 10.0);
         let rect2 = Rectangle::new(2.0, 2.0, 8.0, 8.0);
         let rect3 = Rectangle::new(5.0, 5.0, 15.0, 15.0);
-        
+
         assert!(rect1.contains(&rect2));
         assert!(!rect1.contains(&rect3));
     }

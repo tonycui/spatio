@@ -1,10 +1,10 @@
+use crate::commands::{ArgumentParser, Command};
 use crate::protocol::parser::RespValue;
 use crate::protocol::RespResponse;
 use crate::storage::GeoDatabase;
-use crate::commands::{Command, ArgumentParser};
 use crate::Result;
-use std::sync::Arc;
 use serde_json;
+use std::sync::Arc;
 
 pub struct IntersectsCommand {
     database: Arc<GeoDatabase>,
@@ -21,12 +21,15 @@ impl Command for IntersectsCommand {
         "INTERSECTS"
     }
 
-    fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
+    fn execute(
+        &self,
+        args: &[RespValue],
+    ) -> impl std::future::Future<Output = Result<String>> + Send {
         let database = Arc::clone(&self.database);
-        
+
         // 同步解析参数
         let parse_result = ArgumentParser::new(args, "INTERSECTS").parse_intersects_args();
-        
+
         async move {
             // 检查参数解析结果
             let parsed_args = match parse_result {
@@ -35,25 +38,36 @@ impl Command for IntersectsCommand {
                     return Ok(RespResponse::error(&err_msg));
                 }
             };
-            
+
             // 执行空间查询
-            match database.intersects(&parsed_args.collection_id, &parsed_args.geometry, parsed_args.limit, parsed_args.within).await {
+            match database
+                .intersects(
+                    &parsed_args.collection_id,
+                    &parsed_args.geometry,
+                    parsed_args.limit,
+                    parsed_args.within,
+                )
+                .await
+            {
                 Ok(results) => {
                     if results.is_empty() {
                         Ok(RespResponse::array(None))
                     } else {
                         // 优化：预分配容量，避免Vec动态扩容
                         let mut resp_values = Vec::with_capacity(results.len());
-                        
+
                         for item in results {
                             // 优化：直接使用缓存的 GeoJSON 字符串，零序列化开销
                             resp_values.push(RespValue::BulkString(Some(item.geojson)));
                         }
-                        
+
                         Ok(RespResponse::array(Some(&resp_values)))
                     }
                 }
-                Err(e) => Ok(RespResponse::error(&format!("ERR intersects query failed: {}", e))),
+                Err(e) => Ok(RespResponse::error(&format!(
+                    "ERR intersects query failed: {}",
+                    e
+                ))),
             }
         }
     }
@@ -74,24 +88,33 @@ mod tests {
     #[tokio::test]
     async fn test_intersects_command_success() {
         let database = Arc::new(GeoDatabase::new());
-        
+
         // 添加测试数据
         let point1 = json!({
             "type": "Point",
             "coordinates": [0.0, 0.0]
         });
         let point2 = json!({
-            "type": "Point", 
+            "type": "Point",
             "coordinates": [5.0, 5.0]
         });
         let point3 = json!({
             "type": "Point",
             "coordinates": [15.0, 15.0]
         });
-        
-        database.set("fleet", "vehicle1", &point1.to_string()).await.unwrap();
-        database.set("fleet", "vehicle2", &point2.to_string()).await.unwrap();
-        database.set("fleet", "vehicle3", &point3.to_string()).await.unwrap();
+
+        database
+            .set("fleet", "vehicle1", &point1.to_string())
+            .await
+            .unwrap();
+        database
+            .set("fleet", "vehicle2", &point2.to_string())
+            .await
+            .unwrap();
+        database
+            .set("fleet", "vehicle3", &point3.to_string())
+            .await
+            .unwrap();
 
         let cmd = IntersectsCommand::new(Arc::clone(&database));
 
@@ -113,7 +136,7 @@ mod tests {
         ];
 
         let result = cmd.execute(&args).await.unwrap();
-        
+
         // 应该包含两个结果
         assert!(result.starts_with("*2\r\n"));
         assert!(result.contains("0.0"));
@@ -153,9 +176,7 @@ mod tests {
         let cmd = IntersectsCommand::new(database);
 
         // 参数太少
-        let args = vec![
-            RespValue::BulkString(Some("fleet".to_string())),
-        ];
+        let args = vec![RespValue::BulkString(Some("fleet".to_string()))];
 
         let result = cmd.execute(&args).await.unwrap();
         assert!(result.contains("wrong number of arguments"));
@@ -178,7 +199,7 @@ mod tests {
     #[tokio::test]
     async fn test_intersects_command_with_within_true() {
         let database = Arc::new(GeoDatabase::new());
-        
+
         // 添加测试数据：三个点
         // point1 完全在查询多边形内
         let point1 = json!({
@@ -187,7 +208,7 @@ mod tests {
         });
         // point2 在多边形边界上
         let point2 = json!({
-            "type": "Point", 
+            "type": "Point",
             "coordinates": [5.0, 0.0]
         });
         // point3 在多边形外
@@ -195,10 +216,19 @@ mod tests {
             "type": "Point",
             "coordinates": [15.0, 15.0]
         });
-        
-        database.set("test", "p1", &point1.to_string()).await.unwrap();
-        database.set("test", "p2", &point2.to_string()).await.unwrap();
-        database.set("test", "p3", &point3.to_string()).await.unwrap();
+
+        database
+            .set("test", "p1", &point1.to_string())
+            .await
+            .unwrap();
+        database
+            .set("test", "p2", &point2.to_string())
+            .await
+            .unwrap();
+        database
+            .set("test", "p3", &point3.to_string())
+            .await
+            .unwrap();
 
         let cmd = IntersectsCommand::new(Arc::clone(&database));
 
@@ -223,10 +253,10 @@ mod tests {
         ];
 
         let result_within = cmd.execute(&args_within).await.unwrap();
-        
+
         // 应该包含 point1 和 point2（边界上的点也算在内）
         assert!(result_within.contains("2.0"));
-        
+
         // 使用 WITHIN false（或默认）查询 - 返回所有相交的点
         let args_intersects = vec![
             RespValue::BulkString(Some("test".to_string())),
@@ -236,7 +266,7 @@ mod tests {
         ];
 
         let result_intersects = cmd.execute(&args_intersects).await.unwrap();
-        
+
         // 应该包含 point1 和 point2
         assert!(result_intersects.contains("2.0"));
     }
@@ -244,14 +274,17 @@ mod tests {
     #[tokio::test]
     async fn test_intersects_command_with_within_and_limit() {
         let database = Arc::new(GeoDatabase::new());
-        
+
         // 添加多个在多边形内的点
         for i in 1..=5 {
             let point = json!({
                 "type": "Point",
                 "coordinates": [i as f64, i as f64]
             });
-            database.set("test", &format!("p{}", i), &point.to_string()).await.unwrap();
+            database
+                .set("test", &format!("p{}", i), &point.to_string())
+                .await
+                .unwrap();
         }
 
         let cmd = IntersectsCommand::new(Arc::clone(&database));
@@ -279,9 +312,13 @@ mod tests {
         ];
 
         let result = cmd.execute(&args).await.unwrap();
-        
+
         // 应该最多返回 3 个结果
         // 数组格式是 *3\r\n 开头
-        assert!(result.starts_with("*3\r\n") || result.starts_with("*2\r\n") || result.starts_with("*1\r\n"));
+        assert!(
+            result.starts_with("*3\r\n")
+                || result.starts_with("*2\r\n")
+                || result.starts_with("*1\r\n")
+        );
     }
 }

@@ -1,5 +1,5 @@
-use colored::*;
 use crate::protocol::parser::RespValue;
+use colored::*;
 
 pub struct OutputFormatter;
 
@@ -34,7 +34,7 @@ impl OutputFormatter {
                 } else {
                     s.clone()
                 }
-            },
+            }
             None => "(nil)".red().to_string(),
         }
     }
@@ -55,11 +55,15 @@ impl OutputFormatter {
                             RespValue::Error(e) => format!("(error) {}", e),
                             RespValue::Array(_) => Self::format_response(value), // 递归处理嵌套数组
                         };
-                        result.push_str(&format!("{}) {}\n", (i + 1).to_string().blue(), formatted_value));
+                        result.push_str(&format!(
+                            "{}) {}\n",
+                            (i + 1).to_string().blue(),
+                            formatted_value
+                        ));
                     }
                     result.trim_end().to_string()
                 }
-            },
+            }
             None => "(nil)".red().to_string(),
         }
     }
@@ -69,7 +73,11 @@ impl OutputFormatter {
     }
 
     pub fn format_connecting_message(host: &str, port: u16) -> String {
-        format!("Connecting to {}:{}...", host.cyan(), port.to_string().cyan())
+        format!(
+            "Connecting to {}:{}...",
+            host.cyan(),
+            port.to_string().cyan()
+        )
     }
 
     pub fn format_connected_message(host: &str, port: u16) -> String {
@@ -111,7 +119,7 @@ mod tests {
         let value = RespValue::BulkString(Some("hello".to_string()));
         let result = OutputFormatter::format_response(&value);
         assert!(result.contains("hello"));
-        
+
         let value = RespValue::BulkString(None);
         let result = OutputFormatter::format_response(&value);
         assert!(result.contains("nil"));

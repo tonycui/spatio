@@ -37,3 +37,8 @@ derive_more = "0.99"
 criterion = { version = "0.5", features = ["html_reports"] }
 tempfile = "3.0"
 tokio = { version = "1.0", features = ["full"] }
+
+[lints.clippy]
+# 禁用递归函数中只在递归使用的参数警告
+# 这在树结构的递归辅助函数中很常见，&self 参数用于保持 API 一致性
+only_used_in_recursion = "allow"

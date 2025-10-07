@@ -1,6 +1,6 @@
 use crate::protocol::parser::RespValue;
-use geo::Geometry;
 use crate::storage::geometry_utils::geojson_to_geometry;
+use geo::Geometry;
 
 /// 参数解析工具
 pub struct ArgumentParser<'a> {
@@ -18,7 +18,9 @@ impl<'a> ArgumentParser<'a> {
         if self.args.len() != expected {
             return Err(format!(
                 "ERR wrong number of arguments for '{}' command. Expected {}, got {}",
-                self.command_name, expected, self.args.len()
+                self.command_name,
+                expected,
+                self.args.len()
             ));
         }
         Ok(())
@@ -36,31 +38,30 @@ impl<'a> ArgumentParser<'a> {
     /// 获取并解析 GeoJSON 参数
     pub fn get_geojson(&self, index: usize) -> std::result::Result<serde_json::Value, String> {
         let geojson_str = self.get_string(index, "GeoJSON")?;
-        
+
         // 解析 JSON
-        let geojson: serde_json::Value = serde_json::from_str(geojson_str)
-            .map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
-        
+        let geojson: serde_json::Value =
+            serde_json::from_str(geojson_str).map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
+
         // 基本格式验证
         self.validate_geojson(&geojson)?;
-        
+
         Ok(geojson)
     }
 
     /// 获取并解析 Geometry 参数（直接转换，无中转）
     pub fn get_geometry(&self, index: usize) -> std::result::Result<Geometry, String> {
         let geojson_str = self.get_string(index, "GeoJSON")?;
-        
+
         // 解析为 JSON
         // let geojson_value: serde_json::Value = serde_json::from_str(geojson_str)
         //     .map_err(|e| format!("ERR invalid GeoJSON: {}", e))?;
-        
+
         // // 直接转换为 geo::Geometry
         // geojson_to_geometry(&geojson_value)
         //     .map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
 
-            geojson_to_geometry(&geojson_str)
-            .map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
+        geojson_to_geometry(geojson_str).map_err(|e| format!("ERR invalid GeoJSON geometry: {}", e))
     }
 
     /// 验证 GeoJSON 基本格式
@@ -68,22 +69,22 @@ impl<'a> ArgumentParser<'a> {
         if !geojson.is_object() {
             return Err("ERR invalid GeoJSON: must be an object".to_string());
         }
-        
+
         if geojson.get("type").is_none() {
             return Err("ERR invalid GeoJSON: missing 'type' field".to_string());
         }
-        
+
         Ok(())
     }
 
     /// 解析 SET 命令的参数
     pub fn parse_set_args(&self) -> std::result::Result<SetArgs, String> {
         self.check_arg_count(3)?;
-        
+
         let collection_id = self.get_string(0, "collection ID")?;
         let item_id = self.get_string(1, "item ID")?;
         let geojson = self.get_string(2, "GeoJSON")?;
-        
+
         Ok(SetArgs {
             collection_id: collection_id.to_string(),
             item_id: item_id.to_string(),
@@ -94,10 +95,10 @@ impl<'a> ArgumentParser<'a> {
     /// 解析 GET 命令的参数
     pub fn parse_get_args(&self) -> std::result::Result<GetArgs, String> {
         self.check_arg_count(2)?;
-        
+
         let collection_id = self.get_string(0, "collection ID")?;
         let item_id = self.get_string(1, "item ID")?;
-        
+
         Ok(GetArgs {
             collection_id: collection_id.to_string(),
             item_id: item_id.to_string(),
@@ -107,10 +108,10 @@ impl<'a> ArgumentParser<'a> {
     /// 解析 DELETE 命令的参数
     pub fn parse_delete_args(&self) -> std::result::Result<DeleteArgs, String> {
         self.check_arg_count(2)?;
-        
+
         let collection_id = self.get_string(0, "collection ID")?;
         let item_id = self.get_string(1, "item ID")?;
-        
+
         Ok(DeleteArgs {
             collection_id: collection_id.to_string(),
             item_id: item_id.to_string(),
@@ -127,28 +128,35 @@ impl<'a> ArgumentParser<'a> {
                 self.args.len()
             ));
         }
-        
+
         let collection_id = self.get_string(0, "collection ID")?;
         let geometry = self.get_geometry(1)?;
-        
+
         // 解析可选参数: WITHIN 和 LIMIT
         let mut within = false; // 默认为 false (相交查询)
         let mut limit = 0; // 默认无限制
-        
+
         let mut i = 2;
         while i < self.args.len() {
             let key = self.get_string(i, "option key")?.to_uppercase();
-            
+
             match key.as_str() {
                 "WITHIN" => {
                     if i + 1 >= self.args.len() {
-                        return Err("ERR WITHIN option requires a value (true or false)".to_string());
+                        return Err(
+                            "ERR WITHIN option requires a value (true or false)".to_string()
+                        );
                     }
                     let value = self.get_string(i + 1, "WITHIN value")?;
                     within = match value.to_lowercase().as_str() {
                         "true" | "1" | "yes" => true,
                         "false" | "0" | "no" => false,
-                        _ => return Err(format!("ERR invalid WITHIN value: expected true or false, got {}", value)),
+                        _ => {
+                            return Err(format!(
+                                "ERR invalid WITHIN value: expected true or false, got {}",
+                                value
+                            ))
+                        }
                     };
                     i += 2;
                 }
@@ -167,7 +175,10 @@ impl<'a> ArgumentParser<'a> {
                             break;
                         }
                     }
-                    return Err(format!("ERR unknown option '{}' for INTERSECTS command", key));
+                    return Err(format!(
+                        "ERR unknown option '{}' for INTERSECTS command",
+                        key
+                    ));
                 }
             }
         }
@@ -181,18 +192,23 @@ impl<'a> ArgumentParser<'a> {
     }
 
     /// 获取整数参数
-    pub fn get_integer(&self, index: usize, param_name: &str) -> std::result::Result<usize, String> {
+    pub fn get_integer(
+        &self,
+        index: usize,
+        param_name: &str,
+    ) -> std::result::Result<usize, String> {
         let str_val = self.get_string(index, param_name)?;
-        str_val.parse::<usize>()
+        str_val
+            .parse::<usize>()
             .map_err(|_| format!("ERR invalid {}: expected positive integer", param_name))
     }
 
     /// 解析 DROP 命令的参数
     pub fn parse_drop_args(&self) -> std::result::Result<DropArgs, String> {
         self.check_arg_count(1)?;
-        
+
         let collection_id = self.get_string(0, "collection ID")?;
-        
+
         Ok(DropArgs {
             collection_id: collection_id.to_string(),
         })
@@ -200,11 +216,11 @@ impl<'a> ArgumentParser<'a> {
 
     /// 解析 NEARBY 命令的参数
     /// 语法: NEARBY collection POINT lon lat [COUNT k] [RADIUS meters]
-    /// 
+    ///
     /// COUNT 和 RADIUS 至少需要提供一个，也可以两者都提供
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```ignore
     /// NEARBY fleet POINT 116.4 39.9 COUNT 10           // 最近的 10 个
     /// NEARBY fleet POINT 116.4 39.9 RADIUS 1000       // 1000米内所有
@@ -236,17 +252,25 @@ impl<'a> ArgumentParser<'a> {
         let lon_str = self.get_string(2, "longitude")?;
         let lat_str = self.get_string(3, "latitude")?;
 
-        let query_lon: f64 = lon_str.parse()
+        let query_lon: f64 = lon_str
+            .parse()
             .map_err(|_| format!("ERR invalid longitude: expected number, got '{}'", lon_str))?;
-        let query_lat: f64 = lat_str.parse()
+        let query_lat: f64 = lat_str
+            .parse()
             .map_err(|_| format!("ERR invalid latitude: expected number, got '{}'", lat_str))?;
 
         // 验证经纬度范围
-        if query_lon < -180.0 || query_lon > 180.0 {
-            return Err(format!("ERR invalid longitude: must be between -180 and 180, got {}", query_lon));
+        if !(-180.0..=180.0).contains(&query_lon) {
+            return Err(format!(
+                "ERR invalid longitude: must be between -180 and 180, got {}",
+                query_lon
+            ));
         }
-        if query_lat < -90.0 || query_lat > 90.0 {
-            return Err(format!("ERR invalid latitude: must be between -90 and 90, got {}", query_lat));
+        if !(-90.0..=90.0).contains(&query_lat) {
+            return Err(format!(
+                "ERR invalid latitude: must be between -90 and 90, got {}",
+                query_lat
+            ));
         }
 
         // 解析可选的 COUNT 和 RADIUS 参数
@@ -279,8 +303,9 @@ impl<'a> ArgumentParser<'a> {
                     return Err("ERR duplicate RADIUS keyword".to_string());
                 }
                 let radius_str = self.get_string(i + 1, "radius")?;
-                let radius_val: f64 = radius_str.parse()
-                    .map_err(|_| format!("ERR invalid radius: expected number, got '{}'", radius_str))?;
+                let radius_val: f64 = radius_str.parse().map_err(|_| {
+                    format!("ERR invalid radius: expected number, got '{}'", radius_str)
+                })?;
                 if radius_val <= 0.0 {
                     return Err("ERR radius must be greater than 0".to_string());
                 }
@@ -309,7 +334,6 @@ impl<'a> ArgumentParser<'a> {
             max_radius,
         })
     }
-    
 }
 
 /// SET 命令的解析结果
@@ -340,7 +364,7 @@ pub struct IntersectsArgs {
     pub collection_id: String,
     pub geometry: Geometry,
     pub limit: usize,
-    pub within: bool,  // true: 包含在内，false: 相交
+    pub within: bool, // true: 包含在内，false: 相交
 }
 
 /// DROP 命令的解析结果
@@ -369,12 +393,14 @@ mod tests {
         let args = vec![
             RespValue::BulkString(Some("fleet".to_string())),
             RespValue::BulkString(Some("truck1".to_string())),
-            RespValue::BulkString(Some(json!({"type": "Point", "coordinates": [1.0, 2.0]}).to_string())),
+            RespValue::BulkString(Some(
+                json!({"type": "Point", "coordinates": [1.0, 2.0]}).to_string(),
+            )),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "SET");
         let result = parser.parse_set_args();
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
@@ -391,10 +417,10 @@ mod tests {
             RespValue::BulkString(Some("fleet".to_string())),
             RespValue::BulkString(Some("truck1".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "GET");
         let result = parser.parse_get_args();
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
@@ -403,13 +429,11 @@ mod tests {
 
     #[test]
     fn test_argument_parser_invalid_arg_count() {
-        let args = vec![
-            RespValue::BulkString(Some("fleet".to_string())),
-        ];
-        
+        let args = vec![RespValue::BulkString(Some("fleet".to_string()))];
+
         let parser = ArgumentParser::new(&args, "SET");
         let result = parser.parse_set_args();
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("wrong number of arguments"));
     }
@@ -421,10 +445,10 @@ mod tests {
             RespValue::BulkString(Some("truck1".to_string())),
             RespValue::BulkString(Some("invalid json".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "SET");
         let result = parser.parse_set_args();
-        
+
         // 现在 parse_set_args 只获取字符串，不验证 GeoJSON 格式
         // 验证会在后续的存储过程中进行
         assert!(result.is_ok());
@@ -434,13 +458,13 @@ mod tests {
 
     #[test]
     fn test_get_geometry_point() {
-        let args = vec![
-            RespValue::BulkString(Some(json!({"type": "Point", "coordinates": [10.5, 20.7]}).to_string())),
-        ];
-        
+        let args = vec![RespValue::BulkString(Some(
+            json!({"type": "Point", "coordinates": [10.5, 20.7]}).to_string(),
+        ))];
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_ok());
         let geometry = result.unwrap();
         match geometry {
@@ -464,14 +488,12 @@ mod tests {
                 [0.0, 0.0]
             ]]
         });
-        
-        let args = vec![
-            RespValue::BulkString(Some(polygon_geojson.to_string())),
-        ];
-        
+
+        let args = vec![RespValue::BulkString(Some(polygon_geojson.to_string()))];
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_ok());
         let geometry = result.unwrap();
         match geometry {
@@ -494,14 +516,12 @@ mod tests {
                 "name": "test point"
             }
         });
-        
-        let args = vec![
-            RespValue::BulkString(Some(feature_geojson.to_string())),
-        ];
-        
+
+        let args = vec![RespValue::BulkString(Some(feature_geojson.to_string()))];
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_ok());
         let geometry = result.unwrap();
         match geometry {
@@ -515,13 +535,13 @@ mod tests {
 
     #[test]
     fn test_get_geometry_invalid_json() {
-        let args = vec![
-            RespValue::BulkString(Some("invalid json string".to_string())),
-        ];
-        
+        let args = vec![RespValue::BulkString(Some(
+            "invalid json string".to_string(),
+        ))];
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid GeoJSON geometry"));
     }
@@ -529,10 +549,10 @@ mod tests {
     #[test]
     fn test_get_geometry_missing_parameter() {
         let args = vec![];
-        
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("missing GeoJSON parameter"));
     }
@@ -543,14 +563,12 @@ mod tests {
             "type": "InvalidType",
             "coordinates": [1.0, 2.0]
         });
-        
-        let args = vec![
-            RespValue::BulkString(Some(invalid_geojson.to_string())),
-        ];
-        
+
+        let args = vec![RespValue::BulkString(Some(invalid_geojson.to_string()))];
+
         let parser = ArgumentParser::new(&args, "TEST");
         let result = parser.get_geometry(0);
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid GeoJSON geometry"));
     }
@@ -565,10 +583,10 @@ mod tests {
             RespValue::BulkString(Some("COUNT".to_string())),
             RespValue::BulkString(Some("10".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
@@ -588,10 +606,10 @@ mod tests {
             RespValue::BulkString(Some("RADIUS".to_string())),
             RespValue::BulkString(Some("1000".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
@@ -613,10 +631,10 @@ mod tests {
             RespValue::BulkString(Some("RADIUS".to_string())),
             RespValue::BulkString(Some("5000".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_ok());
         let parsed = result.unwrap();
         assert_eq!(parsed.collection_id, "fleet");
@@ -632,12 +650,14 @@ mod tests {
             RespValue::BulkString(Some("116.4".to_string())),
             RespValue::BulkString(Some("39.9".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("at least one of COUNT or RADIUS"));
+        assert!(result
+            .unwrap_err()
+            .contains("at least one of COUNT or RADIUS"));
     }
 
     #[test]
@@ -650,10 +670,10 @@ mod tests {
             RespValue::BulkString(Some("COUNT".to_string())),
             RespValue::BulkString(Some("10".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("invalid longitude"));
     }
@@ -668,10 +688,10 @@ mod tests {
             RespValue::BulkString(Some("COUNT".to_string())),
             RespValue::BulkString(Some("10".to_string())),
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("expected 'POINT'"));
     }
@@ -686,10 +706,10 @@ mod tests {
             RespValue::BulkString(Some("COUNT".to_string())),
             RespValue::BulkString(Some("0".to_string())), // k = 0
         ];
-        
+
         let parser = ArgumentParser::new(&args, "NEARBY");
         let result = parser.parse_nearby_args();
-        
+
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("count must be greater than 0"));
     }

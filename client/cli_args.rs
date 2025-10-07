@@ -31,13 +31,16 @@ impl CliArgs {
 
     pub fn validate(&self) -> Result<(), String> {
         if !self.interactive && self.command.is_empty() {
-            return Err("No command specified. Use -i for interactive mode or provide a command.".to_string());
+            return Err(
+                "No command specified. Use -i for interactive mode or provide a command."
+                    .to_string(),
+            );
         }
-        
+
         if self.port == 0 {
             return Err("Port must be greater than 0".to_string());
         }
-        
+
         Ok(())
     }
 

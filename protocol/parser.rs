@@ -1,5 +1,5 @@
-use std::io::{BufRead, BufReader, Cursor};
 use crate::Result;
+use std::io::{BufRead, BufReader, Cursor};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RespValue {
@@ -11,6 +11,12 @@ pub enum RespValue {
 }
 
 pub struct RespParser;
+
+impl Default for RespParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl RespParser {
     pub fn new() -> Self {
@@ -26,7 +32,7 @@ impl RespParser {
     fn parse_value<R: BufRead>(&self, reader: &mut R) -> Result<RespValue> {
         let mut line = String::new();
         let bytes_read = reader.read_line(&mut line)?;
-        
+
         if bytes_read == 0 {
             return Err("Unexpected EOF".into());
         }

@@ -1,9 +1,10 @@
-pub mod rectangle;
-pub mod node;
-pub mod rtree;
 pub mod algorithms;
+pub mod node;
+pub mod rectangle;
+#[allow(clippy::module_inception)]
+pub mod rtree;
 
 // 重新导出主要类型
+pub use node::{Entry, Node};
 pub use rectangle::Rectangle;
-pub use node::{Node, Entry};
-pub use rtree::{RTree, GeoItem};
+pub use rtree::{GeoItem, RTree};

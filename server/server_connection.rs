@@ -1,11 +1,11 @@
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tracing::{debug, error, info};
-use std::sync::Arc;
 
 use crate::commands::registry::CommandRegistry;
-use crate::protocol::{RespParser, RespResponse};
 use crate::protocol::parser::RespValue;
+use crate::protocol::{RespParser, RespResponse};
 use crate::storage::GeoDatabase;
 use crate::Result;
 
@@ -41,7 +41,9 @@ impl ServerConnection {
                     if let Err(e) = self.process_command().await {
                         error!("Error processing command: {}", e);
                         let error_response = RespResponse::error(&format!("ERR {}", e));
-                        if let Err(write_err) = self.stream.write_all(error_response.as_bytes()).await {
+                        if let Err(write_err) =
+                            self.stream.write_all(error_response.as_bytes()).await
+                        {
                             error!("Failed to write error response: {}", write_err);
                             break;
                         }
@@ -61,12 +63,16 @@ impl ServerConnection {
     async fn read_command(&mut self) -> Result<usize> {
         let mut temp_buffer = [0; 1024];
         let bytes_read = self.stream.read(&mut temp_buffer).await?;
-        
+
         if bytes_read > 0 {
             self.buffer.extend_from_slice(&temp_buffer[..bytes_read]);
-            debug!("Read {} bytes: {:?}", bytes_read, String::from_utf8_lossy(&self.buffer));
+            debug!(
+                "Read {} bytes: {:?}",
+                bytes_read,
+                String::from_utf8_lossy(&self.buffer)
+            );
         }
-        
+
         Ok(bytes_read)
     }
 
@@ -77,7 +83,7 @@ impl ServerConnection {
 
             // 处理命令
             let response = self.process_command_str(&command_str).await?;
-            
+
             // 发送响应
             self.stream.write_all(response.as_bytes()).await?;
             debug!("Sent response: {}", response.trim_end());

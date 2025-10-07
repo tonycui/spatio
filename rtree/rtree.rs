@@ -1,18 +1,23 @@
+use super::node::{Entry, Node, NodeType};
 use super::rectangle::Rectangle;
-use super::node::{Node, Entry, NodeType};
-use serde::{Deserialize, Serialize};
-use geo::Geometry;
-use std::collections::HashMap;
 use derive_more::Display;
+use geo::Geometry;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[cfg(test)]
 use crate::storage::geometry_utils::geometry_to_geojson;
 
 #[derive(Debug, Display, Clone, Serialize, Deserialize)]
-#[display(fmt = "GeoItem {{ id: {}, geometry: {:?}, geojson: {} }}", id, geometry, geojson)]
+#[display(
+    fmt = "GeoItem {{ id: {}, geometry: {:?}, geojson: {} }}",
+    id,
+    geometry,
+    geojson
+)]
 pub struct GeoItem {
     pub id: String,
-    pub geometry: Geometry,  // 直接存储 geo::Geometry，避免查询时重复转换
+    pub geometry: Geometry, // 直接存储 geo::Geometry，避免查询时重复转换
     // 预计算的 GeoJSON 字符串，避免重复序列化
     pub geojson: String,
 }
@@ -73,7 +78,7 @@ impl RTree {
     pub fn new(max_entries: usize) -> Self {
         assert!(max_entries >= 2, "Max entries must be at least 2");
         let min_entries = max_entries / 2;
-        
+
         RTree {
             root: None,
             max_entries,
@@ -84,7 +89,7 @@ impl RTree {
     }
 
     /// 使用默认参数创建R-tree（M=10, m=5）
-    pub fn default() -> Self {
+    pub fn with_default_capacity() -> Self {
         Self::new(10)
     }
 
@@ -115,7 +120,9 @@ impl RTree {
 
     /// 获取总的条目数量
     pub fn len(&self) -> usize {
-        self.root.as_ref().map_or(0, |node| self.count_entries(node))
+        self.root
+            .as_ref()
+            .map_or(0, |node| self.count_entries(node))
     }
 
     /// 统计节点中的条目数量
@@ -123,12 +130,11 @@ impl RTree {
         if node.is_leaf_node() {
             node.entries.len()
         } else {
-            node.entries.iter()
-                .map(|entry| {
-                    match entry {
-                        Entry::Node { node, .. } => self.count_entries(node),
-                        Entry::Data { .. } => 1,
-                    }
+            node.entries
+                .iter()
+                .map(|entry| match entry {
+                    Entry::Node { node, .. } => self.count_entries(node),
+                    Entry::Data { .. } => 1,
                 })
                 .sum()
         }
@@ -182,7 +188,7 @@ impl RTree {
     }
 
     /// 导出树结构为JSON格式
-    /// 
+    ///
     /// 返回包含完整树结构的JSON字符串，用于前端可视化
     pub fn export_to_json(&self) -> Result<String, serde_json::Error> {
         let visualization = self.create_tree_visualization();
@@ -192,7 +198,10 @@ impl RTree {
     /// 创建用于可视化的树结构
     fn create_tree_visualization(&self) -> TreeVisualization {
         TreeVisualization {
-            root: self.root.as_ref().map(|node| self.create_node_visualization(node)),
+            root: self
+                .root
+                .as_ref()
+                .map(|node| self.create_node_visualization(node)),
             config: TreeConfig {
                 max_entries: self.max_entries,
                 min_entries: self.min_entries,
@@ -209,18 +218,20 @@ impl RTree {
             match entry {
                 Entry::Data { mbr, data } => {
                     data_entries.push(DataEntry {
-                        mbr: mbr.clone(),
+                        mbr: *mbr,
                         data: data.clone(),
                     });
                 }
-                Entry::Node { node: child_node, .. } => {
+                Entry::Node {
+                    node: child_node, ..
+                } => {
                     child_nodes.push(self.create_node_visualization(child_node));
                 }
             }
         }
 
         NodeVisualization {
-            mbr: node.mbr.clone(),
+            mbr: node.mbr,
             node_type: node.node_type.clone(),
             level: node.level,
             data_entries,
@@ -255,10 +266,10 @@ mod tests {
 
     #[test]
     fn test_rtree_search() {
-        use geo::{Geometry, Polygon, Coord};
-        
+        use geo::{Coord, Geometry, Polygon};
+
         let mut rtree = RTree::new(4);
-        
+
         // 插入一些几何体
         let rect1 = Geometry::Polygon(Polygon::new(
             vec![
@@ -266,9 +277,10 @@ mod tests {
                 Coord { x: 10.0, y: 0.0 },
                 Coord { x: 10.0, y: 10.0 },
                 Coord { x: 0.0, y: 10.0 },
-                Coord { x: 0.0, y: 0.0 }
-            ].into(),
-            vec![]
+                Coord { x: 0.0, y: 0.0 },
+            ]
+            .into(),
+            vec![],
         ));
         let rect2 = Geometry::Polygon(Polygon::new(
             vec![
@@ -276,9 +288,10 @@ mod tests {
                 Coord { x: 15.0, y: 5.0 },
                 Coord { x: 15.0, y: 15.0 },
                 Coord { x: 5.0, y: 15.0 },
-                Coord { x: 5.0, y: 5.0 }
-            ].into(),
-            vec![]
+                Coord { x: 5.0, y: 5.0 },
+            ]
+            .into(),
+            vec![],
         ));
         let rect3 = Geometry::Polygon(Polygon::new(
             vec![
@@ -286,9 +299,10 @@ mod tests {
                 Coord { x: 30.0, y: 20.0 },
                 Coord { x: 30.0, y: 30.0 },
                 Coord { x: 20.0, y: 30.0 },
-                Coord { x: 20.0, y: 20.0 }
-            ].into(),
-            vec![]
+                Coord { x: 20.0, y: 20.0 },
+            ]
+            .into(),
+            vec![],
         ));
 
         rtree.insert_geojson("1".to_string(), &geometry_to_geojson(&rect1).to_string());
@@ -302,12 +316,13 @@ mod tests {
                 Coord { x: 12.0, y: 8.0 },
                 Coord { x: 12.0, y: 12.0 },
                 Coord { x: 8.0, y: 12.0 },
-                Coord { x: 8.0, y: 8.0 }
-            ].into(),
-            vec![]
+                Coord { x: 8.0, y: 8.0 },
+            ]
+            .into(),
+            vec![],
         ));
         let results = rtree.search(&query_geom, 100, false);
-        
+
         // 应该找到数据 1 和 2
         // 检查 id 是否存在
         assert!(results.iter().any(|item| item.id == "1"));
@@ -321,9 +336,10 @@ mod tests {
                 Coord { x: 60.0, y: 50.0 },
                 Coord { x: 60.0, y: 60.0 },
                 Coord { x: 50.0, y: 60.0 },
-                Coord { x: 50.0, y: 50.0 }
-            ].into(),
-            vec![]
+                Coord { x: 50.0, y: 50.0 },
+            ]
+            .into(),
+            vec![],
         ));
         let results2 = rtree.search(&query_geom2, 100, false);
         assert!(results2.is_empty());
@@ -331,23 +347,28 @@ mod tests {
 
     #[test]
     fn test_rtree_multiple_insert() {
-        use geo::{Geometry, Point, Polygon, Coord};
-        
+        use geo::{Coord, Geometry, Point, Polygon};
+
         let mut rtree = RTree::new(4);
-        
+
         // 插入多个点
         for i in 0..10 {
             let x = i as f64 * 2.0;
             let y = i as f64 * 2.0;
             let point = Geometry::Point(Point::new(x, y));
             rtree.insert_geojson(i.to_string(), &geometry_to_geojson(&point).to_string());
-            println!("Inserted {}: current len = {}, depth = {}", i, rtree.len(), rtree.depth());
+            println!(
+                "Inserted {}: current len = {}, depth = {}",
+                i,
+                rtree.len(),
+                rtree.depth()
+            );
         }
-        
+
         // 暂时注释掉这个断言，先看看实际情况
         // assert_eq!(rtree.len(), 10);
         assert!(!rtree.is_empty());
-        
+
         // 搜索所有数据
         let query_geom = Geometry::Polygon(Polygon::new(
             vec![
@@ -355,9 +376,10 @@ mod tests {
                 Coord { x: 100.0, y: -1.0 },
                 Coord { x: 100.0, y: 100.0 },
                 Coord { x: -1.0, y: 100.0 },
-                Coord { x: -1.0, y: -1.0 }
-            ].into(),
-            vec![]
+                Coord { x: -1.0, y: -1.0 },
+            ]
+            .into(),
+            vec![],
         ));
         let results = rtree.search(&query_geom, 100, false);
         println!("Search results: {:?}", results);
@@ -365,23 +387,22 @@ mod tests {
         // assert_eq!(results.len(), 10);
     }
 
-
     #[test]
     fn test_json_export_complex_tree() {
         let mut rtree = RTree::new(3); // 更小的分支因子，便于创建多层树
-        
+
         // 插入足够多的数据来创建多层树结构
         for i in 0..10 {
             let x = (i as f64) * 10.0;
             let y = (i as f64) * 5.0;
             rtree.insert(Rectangle::new(x, y, x + 5.0, y + 5.0), i.to_string());
         }
-        
+
         // 导出JSON
         let json = rtree.export_to_json().expect("Failed to export JSON");
-        
+
         println!("Complex tree JSON:\n{}", json);
-        
+
         // 验证树的基本结构
         assert!(json.contains("\"max_entries\": 3"));
         assert!(json.contains("\"min_entries\": 1"));

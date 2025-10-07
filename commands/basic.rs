@@ -10,10 +10,8 @@ impl Command for PingCommand {
         "PING"
     }
 
-    fn execute(&self, _args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
-        async move {
-            Ok(RespResponse::simple_string("PONG"))
-        }
+    async fn execute(&self, _args: &[RespValue]) -> Result<String> {
+        Ok(RespResponse::simple_string("PONG"))
     }
 }
 
@@ -24,10 +22,8 @@ impl Command for HelloCommand {
         "HELLO"
     }
 
-    fn execute(&self, _args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
-        async move {
-            Ok(RespResponse::simple_string("Hello, World!"))
-        }
+    async fn execute(&self, _args: &[RespValue]) -> Result<String> {
+        Ok(RespResponse::simple_string("Hello, World!"))
     }
 }
 
@@ -38,10 +34,8 @@ impl Command for QuitCommand {
         "QUIT"
     }
 
-    fn execute(&self, _args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
-        async move {
-            Ok(RespResponse::simple_string("Goodbye!"))
-        }
+    async fn execute(&self, _args: &[RespValue]) -> Result<String> {
+        Ok(RespResponse::simple_string("Goodbye!"))
     }
 }
 

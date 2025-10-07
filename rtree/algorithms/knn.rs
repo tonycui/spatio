@@ -20,8 +20,8 @@
 //! - Space Complexity: O(log N) for the heap
 //! - Much more efficient than brute-force scan for large datasets
 
-use super::super::rectangle::Rectangle;
 use super::super::node::{Entry, Node};
+use super::super::rectangle::Rectangle;
 use super::super::rtree::GeoItem;
 use geo::Geometry;
 use std::cmp::Ordering;
@@ -44,15 +44,9 @@ pub struct KnnResult {
 #[derive(Debug)]
 enum QueueEntry {
     /// A leaf entry containing actual data
-    LeafEntry {
-        min_distance: f64,
-        item: GeoItem,
-    },
+    LeafEntry { min_distance: f64, item: GeoItem },
     /// An internal node to be explored
-    InternalNode {
-        min_distance: f64,
-        node: Node,
-    },
+    InternalNode { min_distance: f64, node: Node },
 }
 
 impl QueueEntry {
@@ -83,7 +77,8 @@ impl PartialOrd for QueueEntry {
 impl Ord for QueueEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         // Reverse ordering for min-heap behavior
-        other.min_distance()
+        other
+            .min_distance()
             .partial_cmp(&self.min_distance())
             .unwrap_or(Ordering::Equal)
     }
@@ -148,7 +143,7 @@ pub fn point_to_rectangle_distance(point_lon: f64, point_lat: f64, rect: &Rectan
 ///
 /// This function calculates the true minimum distance from a query point to any type of
 /// geometry, including perpendicular distances to line segments and polygon edges.
-/// 
+///
 /// Uses geo crate's ClosestPoint trait to find the nearest point on the geometry surface,
 /// then calculates the Haversine distance. This approach gives accurate results for
 /// local-scale applications (< 100km) with acceptable error for geodetic distances.
@@ -169,9 +164,9 @@ pub fn point_to_rectangle_distance(point_lon: f64, point_lat: f64, rect: &Rectan
 /// - Suitable for local-scale queries; large-scale queries may have minor geodetic errors
 pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geometry) -> f64 {
     use geo::algorithm::closest_point::ClosestPoint;
-    
+
     let query_point = geo::Point::new(point_lon, point_lat);
-    
+
     match geometry {
         Geometry::Point(p) => {
             // Point to point: direct distance
@@ -180,7 +175,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
         Geometry::Line(line) => {
             // Point to line segment: may be perpendicular distance or distance to endpoint
             match line.closest_point(&query_point) {
-                geo::Closest::Intersection(_) => 0.0,  // Point is on the line
+                geo::Closest::Intersection(_) => 0.0, // Point is on the line
                 geo::Closest::SinglePoint(closest) => {
                     haversine_distance(point_lon, point_lat, closest.x(), closest.y())
                 }
@@ -203,7 +198,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
             if poly.contains(&query_point) {
                 return 0.0;
             }
-            
+
             // Find closest point on exterior ring
             let mut min_distance = match poly.exterior().closest_point(&query_point) {
                 geo::Closest::SinglePoint(closest) => {
@@ -212,7 +207,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
                 geo::Closest::Intersection(_) => 0.0,
                 geo::Closest::Indeterminate => f64::INFINITY,
             };
-            
+
             // Check interior rings (holes) - point might be closest to a hole boundary
             for interior in poly.interiors() {
                 let dist = match interior.closest_point(&query_point) {
@@ -224,7 +219,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
                 };
                 min_distance = min_distance.min(dist);
             }
-            
+
             min_distance
         }
         Geometry::MultiPoint(mp) => {
@@ -236,14 +231,12 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
         Geometry::MultiLineString(mls) => {
             // Find nearest line in the collection
             mls.iter()
-                .map(|ls| {
-                    match ls.closest_point(&query_point) {
-                        geo::Closest::Intersection(_) => 0.0,
-                        geo::Closest::SinglePoint(closest) => {
-                            haversine_distance(point_lon, point_lat, closest.x(), closest.y())
-                        }
-                        geo::Closest::Indeterminate => f64::INFINITY,
+                .map(|ls| match ls.closest_point(&query_point) {
+                    geo::Closest::Intersection(_) => 0.0,
+                    geo::Closest::SinglePoint(closest) => {
+                        haversine_distance(point_lon, point_lat, closest.x(), closest.y())
                     }
+                    geo::Closest::Indeterminate => f64::INFINITY,
                 })
                 .fold(f64::INFINITY, f64::min)
         }
@@ -256,7 +249,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
                     if poly.contains(&query_point) {
                         return 0.0;
                     }
-                    
+
                     // Find minimum distance to this polygon's boundary
                     let mut min_dist = match poly.exterior().closest_point(&query_point) {
                         geo::Closest::SinglePoint(closest) => {
@@ -265,7 +258,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
                         geo::Closest::Intersection(_) => 0.0,
                         geo::Closest::Indeterminate => f64::INFINITY,
                     };
-                    
+
                     for interior in poly.interiors() {
                         let dist = match interior.closest_point(&query_point) {
                             geo::Closest::SinglePoint(closest) => {
@@ -276,7 +269,7 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
                         };
                         min_dist = min_dist.min(dist);
                     }
-                    
+
                     min_dist
                 })
                 .fold(f64::INFINITY, f64::min)
@@ -301,10 +294,10 @@ pub fn point_to_geometry_distance(point_lon: f64, point_lat: f64, geometry: &Geo
 /// Convert a geometry to its bounding rectangle
 fn geometry_to_rectangle(geometry: &Geometry) -> Option<Rectangle> {
     use geo::algorithm::bounding_rect::BoundingRect;
-    
-    geometry.bounding_rect().map(|rect| {
-        Rectangle::new(rect.min().x, rect.min().y, rect.max().x, rect.max().y)
-    })
+
+    geometry
+        .bounding_rect()
+        .map(|rect| Rectangle::new(rect.min().x, rect.min().y, rect.max().x, rect.max().y))
 }
 
 /// Perform KNN search on an R-tree
@@ -401,7 +394,9 @@ pub fn knn_search(
 
                 // Keep results sorted by distance
                 results.sort_by(|a, b| {
-                    a.distance.partial_cmp(&b.distance).unwrap_or(Ordering::Equal)
+                    a.distance
+                        .partial_cmp(&b.distance)
+                        .unwrap_or(Ordering::Equal)
                 });
 
                 // Keep only K nearest (if k > 0)
@@ -416,11 +411,8 @@ pub fn knn_search(
                         Entry::Data { mbr: _, data } => {
                             // This is a leaf entry - retrieve geometry and build GeoItem on demand
                             if let Some(geometry) = geometry_map.get(data) {
-                                let distance = point_to_geometry_distance(
-                                    query_lon,
-                                    query_lat,
-                                    geometry,
-                                );
+                                let distance =
+                                    point_to_geometry_distance(query_lon, query_lat, geometry);
 
                                 // Build GeoItem on demand
                                 let item = GeoItem {
@@ -454,6 +446,7 @@ pub fn knn_search(
 }
 
 #[cfg(test)]
+#[allow(clippy::useless_vec)]
 mod tests {
     use super::*;
 
@@ -468,8 +461,11 @@ mod tests {
         let distance = haversine_distance(beijing_lon, beijing_lat, shanghai_lon, shanghai_lat);
 
         // Should be approximately 1067 km = 1,067,000 meters
-        assert!((distance - 1_067_000.0).abs() < 10_000.0, 
-                "Distance should be approximately 1,067,000 meters, got {}", distance);
+        assert!(
+            (distance - 1_067_000.0).abs() < 10_000.0,
+            "Distance should be approximately 1,067,000 meters, got {}",
+            distance
+        );
     }
 
     #[test]
@@ -492,7 +488,7 @@ mod tests {
         // Point outside rectangle
         let rect = Rectangle::new(0.0, 0.0, 10.0, 10.0);
         let distance = point_to_rectangle_distance(15.0, 15.0, &rect);
-        
+
         // Distance should be from (15, 15) to closest corner (10, 10)
         let expected = haversine_distance(15.0, 15.0, 10.0, 10.0);
         assert!((distance - expected).abs() < 1.0);
@@ -510,7 +506,7 @@ mod tests {
     fn test_point_to_geometry_distance_point() {
         let geometry = Geometry::Point(geo::Point::new(116.4, 39.9));
         let distance = point_to_geometry_distance(116.5, 40.0, &geometry);
-        
+
         let expected = haversine_distance(116.5, 40.0, 116.4, 39.9);
         assert!((distance - expected).abs() < 1.0);
     }
@@ -525,19 +521,28 @@ mod tests {
             geo::coord! { x: 10.0, y: 0.0 },
         );
         let geometry = Geometry::Line(line);
-        
+
         let distance = point_to_geometry_distance(5.0, 3.0, &geometry);
-        
+
         // The closest point should be (5, 0), so distance is from (5, 3) to (5, 0)
         let expected = haversine_distance(5.0, 3.0, 5.0, 0.0);
-        
+
         // Should be much less than distance to endpoints
         let dist_to_start = haversine_distance(5.0, 3.0, 0.0, 0.0);
         let dist_to_end = haversine_distance(5.0, 3.0, 10.0, 0.0);
-        
-        assert!(distance < dist_to_start, "Perpendicular distance should be less than distance to start");
-        assert!(distance < dist_to_end, "Perpendicular distance should be less than distance to end");
-        assert!((distance - expected).abs() < 1.0, "Distance should match perpendicular projection");
+
+        assert!(
+            distance < dist_to_start,
+            "Perpendicular distance should be less than distance to start"
+        );
+        assert!(
+            distance < dist_to_end,
+            "Perpendicular distance should be less than distance to end"
+        );
+        assert!(
+            (distance - expected).abs() < 1.0,
+            "Distance should match perpendicular projection"
+        );
     }
 
     #[test]
@@ -549,10 +554,10 @@ mod tests {
             geo::coord! { x: 10.0, y: 10.0 },
         ]);
         let geometry = Geometry::LineString(ls);
-        
+
         // Query point near the horizontal segment
         let distance = point_to_geometry_distance(5.0, 2.0, &geometry);
-        
+
         // Should be perpendicular distance to (5, 0)
         let expected = haversine_distance(5.0, 2.0, 5.0, 0.0);
         assert!((distance - expected).abs() < 1.0);
@@ -572,7 +577,7 @@ mod tests {
             vec![],
         );
         let geometry = Geometry::Polygon(poly);
-        
+
         // Point inside the polygon
         let distance = point_to_geometry_distance(5.0, 5.0, &geometry);
         assert_eq!(distance, 0.0, "Point inside polygon should have distance 0");
@@ -592,17 +597,20 @@ mod tests {
             vec![],
         );
         let geometry = Geometry::Polygon(poly);
-        
+
         // Point outside, directly below the bottom edge
         let distance = point_to_geometry_distance(5.0, -2.0, &geometry);
-        
+
         // Should be perpendicular distance to bottom edge at (5, 0)
         let expected = haversine_distance(5.0, -2.0, 5.0, 0.0);
-        
+
         // Distance to corners should be larger
         let dist_to_corner = haversine_distance(5.0, -2.0, 0.0, 0.0);
-        
-        assert!(distance < dist_to_corner, "Perpendicular distance should be less than distance to corner");
+
+        assert!(
+            distance < dist_to_corner,
+            "Perpendicular distance should be less than distance to corner"
+        );
         assert!((distance - expected).abs() < 1.0);
     }
 
@@ -631,11 +639,11 @@ mod tests {
 
         // Define test points with known distances from query point (116.4, 39.9)
         let test_data = vec![
-            ("p1", 116.5, 40.0),   // Northeast
-            ("p2", 116.3, 39.8),   // Southwest
-            ("p3", 116.4, 39.9),   // Exact match (distance = 0)
-            ("p4", 117.0, 40.5),   // Far northeast
-            ("p5", 116.2, 39.7),   // Far southwest
+            ("p1", 116.5, 40.0), // Northeast
+            ("p2", 116.3, 39.8), // Southwest
+            ("p3", 116.4, 39.9), // Exact match (distance = 0)
+            ("p4", 117.0, 40.5), // Far northeast
+            ("p5", 116.2, 39.7), // Far southwest
         ];
 
         for (id, lon, lat) in test_data.iter() {
@@ -643,7 +651,7 @@ mod tests {
                 r#"{{"type":"Feature","properties":{{"id":"{}"}},"geometry":{{"type":"Point","coordinates":[{},{}]}}}}"#,
                 id, lon, lat
             );
-            
+
             tree.insert_geojson(id.to_string(), &geojson);
         }
 
@@ -688,10 +696,7 @@ mod tests {
             let id = format!("item_{}", i);
             let lon = 116.0 + i as f64 * 0.1;
             let lat = 39.0 + i as f64 * 0.1;
-            let geojson = format!(
-                r#"{{"type":"Point","coordinates":[{},{}]}}"#,
-                lon, lat
-            );
+            let geojson = format!(r#"{{"type":"Point","coordinates":[{},{}]}}"#, lon, lat);
 
             tree.insert_geojson(id.clone(), &geojson);
         }
@@ -724,10 +729,7 @@ mod tests {
                 let id = format!("grid_{}_{}", x, y);
                 let lon = 116.0 + x as f64 * 0.1;
                 let lat = 39.0 + y as f64 * 0.1;
-                let geojson = format!(
-                    r#"{{"type":"Point","coordinates":[{},{}]}}"#,
-                    lon, lat
-                );
+                let geojson = format!(r#"{{"type":"Point","coordinates":[{},{}]}}"#, lon, lat);
                 let geometry = Geometry::Point(geo::Point::new(lon, lat));
 
                 tree.insert_geojson(id.clone(), &geojson);
@@ -764,7 +766,7 @@ mod tests {
 
         // Verify KNN results match brute force
         assert_eq!(knn_results.len(), brute_force_results.len());
-        
+
         for i in 0..k {
             assert_eq!(knn_results[i].item.id, brute_force_results[i].0);
             assert!(
@@ -791,10 +793,7 @@ mod tests {
                 let id = format!("perf_{}_{}", x, y);
                 let lon = 115.0 + x as f64 * 0.1;
                 let lat = 38.0 + y as f64 * 0.1;
-                let geojson = format!(
-                    r#"{{"type":"Point","coordinates":[{},{}]}}"#,
-                    lon, lat
-                );
+                let geojson = format!(r#"{{"type":"Point","coordinates":[{},{}]}}"#, lon, lat);
 
                 tree.insert_geojson(id.clone(), &geojson);
                 all_items.push((lon, lat));
@@ -833,7 +832,7 @@ mod tests {
         println!("K: {}", k);
         println!("KNN search time: {:?}", knn_duration);
         println!("Brute force time: {:?}", brute_force_duration);
-        
+
         if brute_force_duration > knn_duration {
             let speedup = brute_force_duration.as_nanos() as f64 / knn_duration.as_nanos() as f64;
             println!("KNN is {:.2}x faster than brute force", speedup);
@@ -857,18 +856,15 @@ mod tests {
 
         // Insert points at various distances from query point (116.0, 39.0)
         let test_data = vec![
-            ("p1", 116.001, 39.0),    // ~111 meters away
-            ("p2", 116.005, 39.0),    // ~555 meters away
-            ("p3", 116.01, 39.0),     // ~1110 meters away
-            ("p4", 116.02, 39.0),     // ~2220 meters away
-            ("p5", 116.0, 39.001),    // ~111 meters away (纬度方向)
+            ("p1", 116.001, 39.0), // ~111 meters away
+            ("p2", 116.005, 39.0), // ~555 meters away
+            ("p3", 116.01, 39.0),  // ~1110 meters away
+            ("p4", 116.02, 39.0),  // ~2220 meters away
+            ("p5", 116.0, 39.001), // ~111 meters away (纬度方向)
         ];
 
         for (id, lon, lat) in test_data.iter() {
-            let geojson = format!(
-                r#"{{"type":"Point","coordinates":[{},{}]}}"#,
-                lon, lat
-            );
+            let geojson = format!(r#"{{"type":"Point","coordinates":[{},{}]}}"#, lon, lat);
             tree.insert_geojson(id.to_string(), &geojson);
         }
 
@@ -877,31 +873,37 @@ mod tests {
             tree.get_root(),
             116.0,
             39.0,
-            0,  // No k limit
+            0, // No k limit
             &tree.geometry_map,
             &tree.geojson_map,
-            Some(1000.0),  // 1000 meters radius
+            Some(1000.0), // 1000 meters radius
         );
 
         // Should return p1, p2, p3, p5 (all within 1000m), but not p4
         assert_eq!(results.len(), 4, "Should find 4 items within 1000m");
         for result in &results {
-            assert!(result.distance <= 1000.0, 
-                "All results should be within 1000m, found {} at {}m", 
-                result.item.id, result.distance);
+            assert!(
+                result.distance <= 1000.0,
+                "All results should be within 1000m, found {} at {}m",
+                result.item.id,
+                result.distance
+            );
         }
         // Verify p4 is NOT in results (it's >1000m away)
-        assert!(!results.iter().any(|r| r.item.id == "p4"), "p4 should not be in results");
+        assert!(
+            !results.iter().any(|r| r.item.id == "p4"),
+            "p4 should not be in results"
+        );
 
         // Test 2: Only k (k=2), no radius limit
         let results = knn_search(
             tree.get_root(),
             116.0,
             39.0,
-            2,  // Only 2 nearest
+            2, // Only 2 nearest
             &tree.geometry_map,
             &tree.geojson_map,
-            None,  // No radius limit
+            None, // No radius limit
         );
 
         assert_eq!(results.len(), 2, "Should return exactly 2 items");
@@ -911,10 +913,10 @@ mod tests {
             tree.get_root(),
             116.0,
             39.0,
-            2,  // Only 2 nearest
+            2, // Only 2 nearest
             &tree.geometry_map,
             &tree.geojson_map,
-            Some(2000.0),  // 2000 meters radius
+            Some(2000.0), // 2000 meters radius
         );
 
         assert_eq!(results.len(), 2, "Should return 2 items within 2000m");
@@ -927,12 +929,16 @@ mod tests {
             tree.get_root(),
             116.0,
             39.0,
-            10,  // Want 10 items
+            10, // Want 10 items
             &tree.geometry_map,
             &tree.geojson_map,
-            Some(50.0),  // But only within 50 meters (none exist)
+            Some(50.0), // But only within 50 meters (none exist)
         );
 
-        assert_eq!(results.len(), 0, "Should return empty when no items within radius");
+        assert_eq!(
+            results.len(),
+            0,
+            "Should return empty when no items within radius"
+        );
     }
 }

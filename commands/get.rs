@@ -1,9 +1,9 @@
-use std::sync::Arc;
-use crate::commands::Command;
 use crate::commands::args::ArgumentParser;
-use crate::protocol::{RespResponse, parser::RespValue};
+use crate::commands::Command;
+use crate::protocol::{parser::RespValue, RespResponse};
 use crate::storage::GeoDatabase;
 use crate::Result;
+use std::sync::Arc;
 
 pub struct GetCommand {
     database: Arc<GeoDatabase>,
@@ -20,12 +20,15 @@ impl Command for GetCommand {
         "GET"
     }
 
-    fn execute(&self, args: &[RespValue]) -> impl std::future::Future<Output = Result<String>> + Send {
+    fn execute(
+        &self,
+        args: &[RespValue],
+    ) -> impl std::future::Future<Output = Result<String>> + Send {
         let database = Arc::clone(&self.database);
-        
+
         // 同步解析参数
         let parse_result = ArgumentParser::new(args, "GET").parse_get_args();
-        
+
         async move {
             // 检查参数解析结果
             let parsed_args = match parse_result {
@@ -34,9 +37,12 @@ impl Command for GetCommand {
                     return Ok(RespResponse::error(&err_msg));
                 }
             };
-            
+
             // 只有数据库操作需要异步
-            match database.get(&parsed_args.collection_id, &parsed_args.item_id).await {
+            match database
+                .get(&parsed_args.collection_id, &parsed_args.item_id)
+                .await
+            {
                 Ok(Some(item)) => {
                     // 返回 GeoJSON 字符串
                     Ok(RespResponse::bulk_string(Some(&item.geojson)))
@@ -62,7 +68,10 @@ mod tests {
         });
 
         // 先存储数据
-        database.set("fleet", "truck1", &point_json.to_string()).await.unwrap();
+        database
+            .set("fleet", "truck1", &point_json.to_string())
+            .await
+            .unwrap();
 
         let cmd = GetCommand::new(Arc::clone(&database));
 
@@ -96,9 +105,7 @@ mod tests {
         let cmd = GetCommand::new(database);
 
         // 参数太少
-        let args = vec![
-            RespValue::BulkString(Some("fleet".to_string())),
-        ];
+        let args = vec![RespValue::BulkString(Some("fleet".to_string()))];
 
         let result = cmd.execute(&args).await.unwrap();
         assert!(result.contains("wrong number of arguments"));

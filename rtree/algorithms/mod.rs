@@ -1,8 +1,8 @@
 // R-tree算法模块
-// 
+//
 // 这个模块包含R-tree的所有核心算法实现，按功能分解为不同的子模块：
 // - search: 搜索和查询算法
-// - insert: 插入和树构建算法  
+// - insert: 插入和树构建算法
 // - split: 节点分裂算法
 // - delete: 删除和树维护算法
 // - knn: K-最近邻搜索算法
@@ -12,12 +12,11 @@
 // - concurrent: 并发安全的R-tree实现（使用 std::sync）
 // - async_concurrent: 异步并发安全的R-tree实现（使用 tokio::sync）
 
-pub mod search;
-pub mod insert;
-pub mod split;
-pub mod delete;
-pub mod knn;
-pub mod utils;
 pub mod debug;
+pub mod delete;
+pub mod insert;
+pub mod knn;
 pub mod persistence;
-
+pub mod search;
+pub mod split;
+pub mod utils;

@@ -1,7 +1,7 @@
-use spatio::{Config, Result};
-use spatio::server::TcpServer;
-use tracing::{info, Level};
 use clap::Parser;
+use spatio::server::TcpServer;
+use spatio::{Config, Result};
+use tracing::{info, Level};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

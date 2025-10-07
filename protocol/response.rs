@@ -57,7 +57,10 @@ mod tests {
 
     #[test]
     fn test_error() {
-        assert_eq!(RespResponse::error("ERR unknown command"), "-ERR unknown command\r\n");
+        assert_eq!(
+            RespResponse::error("ERR unknown command"),
+            "-ERR unknown command\r\n"
+        );
     }
 
     #[test]
@@ -67,7 +70,10 @@ mod tests {
 
     #[test]
     fn test_bulk_string() {
-        assert_eq!(RespResponse::bulk_string(Some("foobar")), "$6\r\nfoobar\r\n");
+        assert_eq!(
+            RespResponse::bulk_string(Some("foobar")),
+            "$6\r\nfoobar\r\n"
+        );
         assert_eq!(RespResponse::bulk_string(None), "$-1\r\n");
     }
 }

@@ -46,19 +46,9 @@ impl RTree {
     /// # 参数
     /// * `path` - 目标文件路径
     ///
-    /// # 示例
-    /// ```
-    /// use spatio::rtree::RTree;
-    ///
-    /// let mut rtree = RTree::new(4);
-    /// // ... 插入数据 ...
-    ///
-    /// // JSON格式（调试用）
-    /// rtree.dump_to_file("data.json").unwrap();
-    ///
-    /// // 二进制格式（生产用）
-    /// rtree.dump_to_file("data.bin").unwrap();
-    /// ```
+    /// # 使用说明
+    /// 调用此方法会根据文件扩展名自动选择序列化格式。
+    /// JSON格式适合调试和人工查看，二进制格式适合生产环境使用。
     pub fn dump_to_file<P: AsRef<Path>>(&self, path: P) -> Result<(), PersistenceError> {
         let format = SerializationFormat::from_extension(&path);
         self.dump_to_file_with_format(path, format)

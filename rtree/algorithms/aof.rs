@@ -243,6 +243,178 @@ impl AofCommand {
 }
 
 // ============================================================================
+// AOF Writer
+// ============================================================================
+
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Write};
+use std::time::Instant;
+
+/// AOF 写入器
+///
+/// 负责将命令追加到 AOF 文件中，支持三种同步策略
+pub struct AofWriter {
+    writer: BufWriter<File>,
+    config: AofConfig,
+    last_sync: Instant,
+    bytes_written: u64,
+}
+
+impl AofWriter {
+    /// 创建新的 AOF Writer
+    ///
+    /// # 参数
+    /// * `config` - AOF 配置
+    ///
+    /// # 错误
+    /// - 如果 AOF 被禁用，返回 `AofError::Disabled`
+    /// - 如果无法创建目录或打开文件，返回 IO 错误
+    ///
+    /// # 示例
+    /// ```
+    /// use spatio::rtree::algorithms::aof::{AofConfig, AofWriter};
+    /// use std::path::PathBuf;
+    ///
+    /// let config = AofConfig::new(PathBuf::from("test.aof"));
+    /// let writer = AofWriter::new(config).unwrap();
+    /// ```
+    pub fn new(config: AofConfig) -> Result<Self, AofError> {
+        if !config.enabled {
+            return Err(AofError::Disabled);
+        }
+
+        // 创建目录（如果不存在）
+        if let Some(parent) = config.file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        // 打开文件（追加模式）
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&config.file_path)?;
+
+        Ok(Self {
+            writer: BufWriter::new(file),
+            config,
+            last_sync: Instant::now(),
+            bytes_written: 0,
+        })
+    }
+
+    /// 追加命令到 AOF
+    ///
+    /// 将命令序列化为 JSON Lines 格式并写入文件，根据同步策略决定是否立即同步到磁盘
+    ///
+    /// # 参数
+    /// * `cmd` - 要追加的命令
+    ///
+    /// # 错误
+    /// - JSON 序列化错误
+    /// - IO 写入错误
+    /// - fsync 错误
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::rtree::algorithms::aof::{AofCommand, AofConfig, AofWriter};
+    /// use std::path::PathBuf;
+    ///
+    /// let config = AofConfig::new(PathBuf::from("test.aof"));
+    /// let mut writer = AofWriter::new(config).unwrap();
+    ///
+    /// let cmd = AofCommand::insert(
+    ///     "cities".to_string(),
+    ///     "beijing".to_string(),
+    ///     [116.0, 39.0, 117.0, 40.0],
+    ///     r#"{"type":"Point"}"#.to_string(),
+    /// );
+    ///
+    /// writer.append(&cmd).unwrap();
+    /// ```
+    pub fn append(&mut self, cmd: &AofCommand) -> Result<(), AofError> {
+        // 序列化为 JSON（单行，不换行）
+        let json = serde_json::to_string(cmd)?;
+
+        // 写入一行（JSON + \n）
+        writeln!(self.writer, "{}", json)?;
+
+        self.bytes_written += (json.len() + 1) as u64;
+
+        // 根据同步策略决定是否 fsync
+        self.sync_if_needed()?;
+
+        Ok(())
+    }
+
+    /// 根据策略执行同步
+    ///
+    /// - `Always`: 立即 flush 并 fsync
+    /// - `EverySecond`: 每秒 flush 并 fsync
+    /// - `No`: 每 1MB flush（不 fsync）
+    fn sync_if_needed(&mut self) -> Result<(), AofError> {
+        match self.config.sync_policy {
+            AofSyncPolicy::Always => {
+                // 立即刷新并同步到磁盘
+                self.writer.flush()?;
+                self.writer.get_ref().sync_data()?;
+            }
+            AofSyncPolicy::EverySecond => {
+                // 每秒同步一次
+                if self.last_sync.elapsed().as_secs() >= 1 {
+                    self.writer.flush()?;
+                    self.writer.get_ref().sync_data()?;
+                    self.last_sync = Instant::now();
+                }
+            }
+            AofSyncPolicy::No => {
+                // 每 1MB 刷新一次缓冲区（但不 fsync）
+                if self.bytes_written % (1024 * 1024) == 0 {
+                    self.writer.flush()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// 手动刷新缓冲区并同步到磁盘
+    ///
+    /// 用于确保所有数据都写入磁盘，通常在关闭前调用
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::rtree::algorithms::aof::{AofConfig, AofWriter};
+    /// use std::path::PathBuf;
+    ///
+    /// let config = AofConfig::new(PathBuf::from("test.aof"));
+    /// let mut writer = AofWriter::new(config).unwrap();
+    /// // ... 写入数据 ...
+    /// writer.flush().unwrap();
+    /// ```
+    pub fn flush(&mut self) -> Result<(), AofError> {
+        self.writer.flush()?;
+        self.writer.get_ref().sync_all()?;
+        Ok(())
+    }
+
+    /// 获取已写入的字节数
+    pub fn bytes_written(&self) -> u64 {
+        self.bytes_written
+    }
+
+    /// 获取配置的引用
+    pub fn config(&self) -> &AofConfig {
+        &self.config
+    }
+}
+
+impl Drop for AofWriter {
+    /// 析构时自动刷新缓冲区
+    fn drop(&mut self) {
+        let _ = self.flush();
+    }
+}
+
+// ============================================================================
 // 单元测试
 // ============================================================================
 
@@ -388,5 +560,247 @@ mod tests {
         let error_msg = format!("{}", error);
         assert!(error_msg.contains("42"));
         assert!(error_msg.contains("malformed JSON"));
+    }
+
+    // ========================================================================
+    // AOF Writer 测试
+    // ========================================================================
+
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_aof_writer_basic() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        let config = AofConfig::new(aof_path.clone())
+            .set_sync_policy(AofSyncPolicy::Always)
+            .with_enabled(true);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        // 写入测试命令
+        let cmd1 = AofCommand::insert(
+            "cities".to_string(),
+            "beijing".to_string(),
+            [116.0, 39.0, 117.0, 40.0],
+            r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
+        );
+        writer.append(&cmd1).unwrap();
+
+        let cmd2 = AofCommand::delete(
+            "cities".to_string(),
+            "beijing".to_string(),
+            [116.0, 39.0, 117.0, 40.0],
+        );
+        writer.append(&cmd2).unwrap();
+
+        writer.flush().unwrap();
+        drop(writer);
+
+        // 验证文件存在且有内容
+        assert!(aof_path.exists());
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        assert!(content.contains(r#""cmd":"INSERT""#));
+        assert!(content.contains(r#""cmd":"DELETE""#));
+    }
+
+    #[test]
+    fn test_aof_writer_json_lines_format() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        let config = AofConfig::new(aof_path.clone())
+            .set_sync_policy(AofSyncPolicy::No)
+            .with_enabled(true);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        // 写入多条命令
+        for i in 0..10 {
+            let cmd = AofCommand::insert(
+                "test".to_string(),
+                format!("key{}", i),
+                [0.0, 0.0, 1.0, 1.0],
+                "{}".to_string(),
+            );
+            writer.append(&cmd).unwrap();
+        }
+
+        writer.flush().unwrap();
+        drop(writer);
+
+        // 验证每行都是有效的 JSON
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+        assert_eq!(lines.len(), 10);
+
+        for line in lines {
+            serde_json::from_str::<AofCommand>(line).unwrap();
+        }
+    }
+
+    #[test]
+    fn test_aof_writer_sync_policy_always() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_always.aof");
+
+        let config = AofConfig::new(aof_path.clone())
+            .set_sync_policy(AofSyncPolicy::Always);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        let cmd = AofCommand::insert(
+            "test".to_string(),
+            "key1".to_string(),
+            [0.0, 0.0, 1.0, 1.0],
+            "{}".to_string(),
+        );
+
+        // Always 策略应该立即写入
+        writer.append(&cmd).unwrap();
+
+        // 不需要显式 flush，数据应该已经在磁盘上
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        assert!(content.contains(r#""cmd":"INSERT""#));
+    }
+
+    #[test]
+    fn test_aof_writer_sync_policy_everysecond() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_everysec.aof");
+
+        let config = AofConfig::new(aof_path.clone())
+            .set_sync_policy(AofSyncPolicy::EverySecond);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        let cmd = AofCommand::insert(
+            "test".to_string(),
+            "key1".to_string(),
+            [0.0, 0.0, 1.0, 1.0],
+            "{}".to_string(),
+        );
+
+        writer.append(&cmd).unwrap();
+
+        // 等待超过 1 秒
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+
+        // 再写入一条，应该触发同步
+        writer.append(&cmd).unwrap();
+
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        assert!(content.contains(r#""cmd":"INSERT""#));
+    }
+
+    #[test]
+    fn test_aof_writer_sync_policy_no() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_no.aof");
+
+        let config = AofConfig::new(aof_path.clone()).set_sync_policy(AofSyncPolicy::No);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        let cmd = AofCommand::insert(
+            "test".to_string(),
+            "key1".to_string(),
+            [0.0, 0.0, 1.0, 1.0],
+            "{}".to_string(),
+        );
+
+        writer.append(&cmd).unwrap();
+
+        // No 策略不会立即同步，需要显式 flush
+        writer.flush().unwrap();
+
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        assert!(content.contains(r#""cmd":"INSERT""#));
+    }
+
+    #[test]
+    fn test_aof_writer_bytes_written() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_bytes.aof");
+
+        let config = AofConfig::new(aof_path).set_sync_policy(AofSyncPolicy::No);
+
+        let mut writer = AofWriter::new(config).unwrap();
+
+        assert_eq!(writer.bytes_written(), 0);
+
+        let cmd = AofCommand::insert(
+            "test".to_string(),
+            "key1".to_string(),
+            [0.0, 0.0, 1.0, 1.0],
+            "{}".to_string(),
+        );
+
+        writer.append(&cmd).unwrap();
+        assert!(writer.bytes_written() > 0);
+
+        let bytes1 = writer.bytes_written();
+        writer.append(&cmd).unwrap();
+        let bytes2 = writer.bytes_written();
+
+        assert!(bytes2 > bytes1);
+    }
+
+    #[test]
+    fn test_aof_writer_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_disabled.aof");
+
+        let config = AofConfig::new(aof_path).with_enabled(false);
+
+        let result = AofWriter::new(config);
+        assert!(matches!(result, Err(AofError::Disabled)));
+    }
+
+    #[test]
+    fn test_aof_writer_drop_flushes() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test_drop.aof");
+
+        {
+            let config = AofConfig::new(aof_path.clone()).set_sync_policy(AofSyncPolicy::No);
+            let mut writer = AofWriter::new(config).unwrap();
+
+            let cmd = AofCommand::insert(
+                "test".to_string(),
+                "key1".to_string(),
+                [0.0, 0.0, 1.0, 1.0],
+                "{}".to_string(),
+            );
+
+            writer.append(&cmd).unwrap();
+            // writer 在这里被 drop，应该自动 flush
+        }
+
+        // 验证数据已写入
+        let content = std::fs::read_to_string(&aof_path).unwrap();
+        assert!(content.contains(r#""cmd":"INSERT""#));
+    }
+
+    #[test]
+    fn test_aof_writer_create_directory() {
+        let temp_dir = TempDir::new().unwrap();
+        let nested_path = temp_dir.path().join("nested/dir/test.aof");
+
+        let config = AofConfig::new(nested_path.clone());
+        let mut writer = AofWriter::new(config).unwrap();
+
+        let cmd = AofCommand::insert(
+            "test".to_string(),
+            "key1".to_string(),
+            [0.0, 0.0, 1.0, 1.0],
+            "{}".to_string(),
+        );
+
+        writer.append(&cmd).unwrap();
+        writer.flush().unwrap();
+
+        assert!(nested_path.exists());
     }
 }

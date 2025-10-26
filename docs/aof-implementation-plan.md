@@ -37,36 +37,36 @@
 
 ---
 
-## Phase 2: AOF Writer 实现（2-3天）
+## Phase 2: AOF Writer 实现（2-3天）✅ 已完成
 
 ### 目标
 实现 AOF 写入器，支持 JSON Lines 格式和三种同步策略。
 
 ### 任务清单
-- [ ] 实现 `AofWriter` 结构体
-- [ ] 实现 `append()` 方法（写入一行 JSON）
-- [ ] 实现 `sync_if_needed()` 方法（根据策略同步）
-- [ ] 实现 `flush()` 方法（手动刷新）
-- [ ] 在 `Drop` trait 中自动刷新
-- [ ] 添加单元测试（基本写入、JSON Lines 格式、同步策略）
+- [x] 实现 `AofWriter` 结构体
+- [x] 实现 `append()` 方法（写入一行 JSON）
+- [x] 实现 `sync_if_needed()` 方法（根据策略同步）
+- [x] 实现 `flush()` 方法（手动刷新）
+- [x] 在 `Drop` trait 中自动刷新
+- [x] 添加单元测试（基本写入、JSON Lines 格式、同步策略）
 
 ### 验收标准
 - ✅ 可以正确写入 AOF 文件
 - ✅ JSON Lines 格式正确（每行一条 JSON）
 - ✅ 三种同步策略都能正常工作
-- ✅ 所有测试通过
+- ✅ 所有 9 个测试通过
+- ✅ 自动创建目录
+- ✅ Drop 时自动 flush
 
-### 关键实现
-```rust
-// AofWriter::new() - 打开文件（追加模式）
-// AofWriter::append() - 序列化 + 写入 + 同步
-// 同步策略:
-//   - Always: 立即 flush + sync_data
-//   - EverySecond: 每秒 flush + sync_data
-//   - No: 每 1MB flush（不 fsync）
-```
+### 实现亮点
+- 使用 `BufWriter` 提升性能
+- `sync_data()` 替代 `sync_all()`（更快）
+- 完善的错误处理
+- 详细的文档注释和示例代码
 
 ---
+
+
 
 ## Phase 3: AOF Reader 实现（2天）
 

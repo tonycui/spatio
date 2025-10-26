@@ -247,7 +247,7 @@ impl AofCommand {
 // ============================================================================
 
 use std::fs::{File, OpenOptions};
-use std::io::{BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::time::Instant;
 
 /// AOF 写入器
@@ -411,6 +411,182 @@ impl Drop for AofWriter {
     /// 析构时自动刷新缓冲区
     fn drop(&mut self) {
         let _ = self.flush();
+    }
+}
+
+// ============================================================================
+// AOF Reader
+// ============================================================================
+
+/// AOF 读取器
+///
+/// 负责从 AOF 文件中读取命令，支持容错恢复
+pub struct AofReader {
+    reader: BufReader<File>,
+    line_count: usize,
+}
+
+impl AofReader {
+    /// 打开 AOF 文件
+    ///
+    /// # 参数
+    /// * `file_path` - AOF 文件路径
+    ///
+    /// # 错误
+    /// - 如果文件不存在，返回 `AofError::FileNotFound`
+    /// - 如果无法打开文件，返回 IO 错误
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::rtree::algorithms::aof::AofReader;
+    /// use std::path::PathBuf;
+    ///
+    /// let reader = AofReader::open(PathBuf::from("appendonly.aof")).unwrap();
+    /// ```
+    pub fn open(file_path: PathBuf) -> Result<Self, AofError> {
+        if !file_path.exists() {
+            return Err(AofError::FileNotFound);
+        }
+
+        let file = File::open(&file_path)?;
+
+        Ok(Self {
+            reader: BufReader::new(file),
+            line_count: 0,
+        })
+    }
+
+    /// 读取下一条命令
+    ///
+    /// 逐行读取 AOF 文件，解析 JSON Lines 格式的命令。
+    /// 自动跳过空行。
+    ///
+    /// # 返回
+    /// - `Ok(Some(command))` - 成功读取到命令
+    /// - `Ok(None)` - 到达文件末尾
+    /// - `Err(...)` - 读取或解析错误
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::rtree::algorithms::aof::AofReader;
+    /// use std::path::PathBuf;
+    ///
+    /// let mut reader = AofReader::open(PathBuf::from("appendonly.aof")).unwrap();
+    ///
+    /// while let Some(cmd) = reader.read_next().unwrap() {
+    ///     println!("Command: {:?}", cmd);
+    /// }
+    /// ```
+    pub fn read_next(&mut self) -> Result<Option<AofCommand>, AofError> {
+        let mut line = String::new();
+
+        loop {
+            line.clear();
+            let bytes_read = self.reader.read_line(&mut line)?;
+
+            if bytes_read == 0 {
+                return Ok(None); // EOF
+            }
+
+            self.line_count += 1;
+            let line = line.trim();
+
+            if line.is_empty() {
+                continue; // 跳过空行
+            }
+
+            match serde_json::from_str::<AofCommand>(line) {
+                Ok(cmd) => return Ok(Some(cmd)),
+                Err(e) => {
+                    return Err(AofError::InvalidCommand {
+                        line: self.line_count,
+                        reason: e.to_string(),
+                    });
+                }
+            }
+        }
+    }
+
+    /// 恢复所有命令（容错模式）
+    ///
+    /// 读取整个 AOF 文件，尽可能恢复所有有效命令。
+    /// 遇到损坏的行会记录错误但继续读取。
+    ///
+    /// # 返回
+    /// 返回 `RecoveryResult`，包含成功恢复的命令、错误列表和统计信息。
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::rtree::algorithms::aof::AofReader;
+    /// use std::path::PathBuf;
+    ///
+    /// let mut reader = AofReader::open(PathBuf::from("appendonly.aof")).unwrap();
+    /// let result = reader.recover_all().unwrap();
+    ///
+    /// println!("Recovered {} commands", result.commands.len());
+    /// println!("Success rate: {:.2}%", result.success_rate());
+    ///
+    /// if !result.is_complete() {
+    ///     eprintln!("Encountered {} errors during recovery", result.errors.len());
+    /// }
+    /// ```
+    pub fn recover_all(&mut self) -> Result<RecoveryResult, AofError> {
+        let mut commands = Vec::new();
+        let mut errors = Vec::new();
+
+        loop {
+            match self.read_next() {
+                Ok(Some(cmd)) => {
+                    commands.push(cmd);
+                }
+                Ok(None) => break,
+                Err(e) => {
+                    // 记录错误但继续恢复
+                    errors.push(e);
+                }
+            }
+        }
+
+        Ok(RecoveryResult {
+            commands,
+            errors,
+            total_lines: self.line_count,
+        })
+    }
+
+    /// 获取当前行号
+    pub fn current_line(&self) -> usize {
+        self.line_count
+    }
+}
+
+/// 恢复结果
+///
+/// 包含 AOF 恢复过程的统计信息和结果
+#[derive(Debug)]
+pub struct RecoveryResult {
+    /// 成功恢复的命令列表
+    pub commands: Vec<AofCommand>,
+    
+    /// 恢复过程中遇到的错误列表
+    pub errors: Vec<AofError>,
+    
+    /// 总行数（包括空行）
+    pub total_lines: usize,
+}
+
+impl RecoveryResult {
+    /// 是否完全成功（无错误）
+    pub fn is_complete(&self) -> bool {
+        self.errors.is_empty()
+    }
+
+    /// 成功率（百分比）
+    pub fn success_rate(&self) -> f64 {
+        if self.total_lines == 0 {
+            return 100.0;
+        }
+        (self.commands.len() as f64 / self.total_lines as f64) * 100.0
     }
 }
 
@@ -802,5 +978,280 @@ mod tests {
         writer.flush().unwrap();
 
         assert!(nested_path.exists());
+    }
+
+    // ========================================================================
+    // AOF Reader 测试
+    // ========================================================================
+
+    #[test]
+    fn test_aof_reader_basic() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        // 写入测试数据
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let mut writer = AofWriter::new(config).unwrap();
+
+            let cmd1 = AofCommand::insert(
+                "cities".to_string(),
+                "beijing".to_string(),
+                [116.0, 39.0, 117.0, 40.0],
+                r#"{"type":"Point"}"#.to_string(),
+            );
+            writer.append(&cmd1).unwrap();
+
+            let cmd2 = AofCommand::delete(
+                "cities".to_string(),
+                "shanghai".to_string(),
+                [121.0, 31.0, 122.0, 32.0],
+            );
+            writer.append(&cmd2).unwrap();
+
+            let cmd3 = AofCommand::drop("cities".to_string());
+            writer.append(&cmd3).unwrap();
+
+            writer.flush().unwrap();
+        }
+
+        // 读取并验证
+        let mut reader = AofReader::open(aof_path).unwrap();
+
+        let cmd1 = reader.read_next().unwrap().unwrap();
+        assert!(matches!(cmd1, AofCommand::Insert { .. }));
+        assert_eq!(cmd1.collection(), "cities");
+
+        let cmd2 = reader.read_next().unwrap().unwrap();
+        assert!(matches!(cmd2, AofCommand::Delete { .. }));
+
+        let cmd3 = reader.read_next().unwrap().unwrap();
+        assert!(matches!(cmd3, AofCommand::Drop { .. }));
+
+        let cmd4 = reader.read_next().unwrap();
+        assert!(cmd4.is_none());
+    }
+
+    #[test]
+    fn test_aof_reader_recover_all() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        // 写入 100 条命令
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let mut writer = AofWriter::new(config).unwrap();
+
+            for i in 0..100 {
+                let cmd = AofCommand::insert(
+                    "test".to_string(),
+                    format!("key{}", i),
+                    [0.0, 0.0, 1.0, 1.0],
+                    "{}".to_string(),
+                );
+                writer.append(&cmd).unwrap();
+            }
+
+            writer.flush().unwrap();
+        }
+
+        // 恢复所有命令
+        let mut reader = AofReader::open(aof_path).unwrap();
+        let result = reader.recover_all().unwrap();
+
+        assert_eq!(result.commands.len(), 100);
+        assert_eq!(result.total_lines, 100);
+        assert!(result.is_complete());
+        assert_eq!(result.success_rate(), 100.0);
+    }
+
+    #[test]
+    fn test_aof_reader_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("empty.aof");
+
+        // 创建空文件
+        File::create(&aof_path).unwrap();
+
+        let mut reader = AofReader::open(aof_path).unwrap();
+        let result = reader.recover_all().unwrap();
+
+        assert_eq!(result.commands.len(), 0);
+        assert_eq!(result.total_lines, 0);
+        assert!(result.is_complete());
+        assert_eq!(result.success_rate(), 100.0);
+    }
+
+    #[test]
+    fn test_aof_reader_file_not_found() {
+        let result = AofReader::open(PathBuf::from("/nonexistent/file.aof"));
+        assert!(matches!(result, Err(AofError::FileNotFound)));
+    }
+
+    #[test]
+    fn test_aof_reader_corrupted_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("corrupted.aof");
+
+        // 写入混合数据：有效命令 + 损坏数据 + 有效命令
+        {
+            let mut file = File::create(&aof_path).unwrap();
+
+            // 有效命令
+            let cmd1 = AofCommand::insert(
+                "test".to_string(),
+                "key1".to_string(),
+                [0.0, 0.0, 1.0, 1.0],
+                "{}".to_string(),
+            );
+            writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
+
+            // 损坏的 JSON
+            writeln!(file, "{{invalid json}}").unwrap();
+
+            // 不完整的 JSON
+            write!(file, "{{\"cmd\":\"INSERT\"").unwrap();
+
+            file.flush().unwrap();
+        }
+
+        // 恢复（容错模式）
+        let mut reader = AofReader::open(aof_path).unwrap();
+        let result = reader.recover_all().unwrap();
+
+        // 应该恢复 1 条有效命令，遇到 2 个错误
+        assert_eq!(result.commands.len(), 1);
+        assert_eq!(result.errors.len(), 2);
+        assert!(!result.is_complete());
+        assert_eq!(result.total_lines, 3);
+    }
+
+    #[test]
+    fn test_aof_reader_skip_empty_lines() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        // 写入带空行的数据
+        {
+            let mut file = File::create(&aof_path).unwrap();
+
+            let cmd1 = AofCommand::insert(
+                "test".to_string(),
+                "key1".to_string(),
+                [0.0, 0.0, 1.0, 1.0],
+                "{}".to_string(),
+            );
+            writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
+
+            writeln!(file).unwrap(); // 空行
+            writeln!(file).unwrap(); // 空行
+
+            let cmd2 = AofCommand::delete(
+                "test".to_string(),
+                "key2".to_string(),
+                [0.0, 0.0, 1.0, 1.0],
+            );
+            writeln!(file, "{}", serde_json::to_string(&cmd2).unwrap()).unwrap();
+
+            file.flush().unwrap();
+        }
+
+        let mut reader = AofReader::open(aof_path).unwrap();
+        let result = reader.recover_all().unwrap();
+
+        // 应该恢复 2 条命令，跳过空行
+        assert_eq!(result.commands.len(), 2);
+        assert!(result.is_complete());
+        assert_eq!(result.total_lines, 4); // 包括空行
+    }
+
+    #[test]
+    fn test_aof_reader_write_then_read() {
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        // 写入不同类型的命令
+        let original_commands = vec![
+            AofCommand::insert(
+                "cities".to_string(),
+                "beijing".to_string(),
+                [116.0, 39.0, 117.0, 40.0],
+                r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
+            ),
+            AofCommand::insert(
+                "cities".to_string(),
+                "shanghai".to_string(),
+                [121.0, 31.0, 122.0, 32.0],
+                r#"{"type":"Point","coordinates":[121.5,31.2]}"#.to_string(),
+            ),
+            AofCommand::delete(
+                "cities".to_string(),
+                "beijing".to_string(),
+                [116.0, 39.0, 117.0, 40.0],
+            ),
+            AofCommand::drop("cities".to_string()),
+        ];
+
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let mut writer = AofWriter::new(config).unwrap();
+
+            for cmd in &original_commands {
+                writer.append(cmd).unwrap();
+            }
+
+            writer.flush().unwrap();
+        }
+
+        // 读取并验证
+        let mut reader = AofReader::open(aof_path).unwrap();
+        let result = reader.recover_all().unwrap();
+
+        assert_eq!(result.commands.len(), 4);
+        assert!(result.is_complete());
+
+        // 验证命令类型
+        assert!(matches!(result.commands[0], AofCommand::Insert { .. }));
+        assert!(matches!(result.commands[1], AofCommand::Insert { .. }));
+        assert!(matches!(result.commands[2], AofCommand::Delete { .. }));
+        assert!(matches!(result.commands[3], AofCommand::Drop { .. }));
+
+        // 验证集合名称
+        for cmd in &result.commands {
+            assert_eq!(cmd.collection(), "cities");
+        }
+    }
+
+    #[test]
+    fn test_recovery_result_success_rate() {
+        // 100% 成功率
+        let result = RecoveryResult {
+            commands: vec![
+                AofCommand::drop("test".to_string()),
+                AofCommand::drop("test".to_string()),
+            ],
+            errors: vec![],
+            total_lines: 2,
+        };
+        assert_eq!(result.success_rate(), 100.0);
+        assert!(result.is_complete());
+
+        // 50% 成功率
+        let result = RecoveryResult {
+            commands: vec![AofCommand::drop("test".to_string())],
+            errors: vec![AofError::FileNotFound],
+            total_lines: 2,
+        };
+        assert_eq!(result.success_rate(), 50.0);
+        assert!(!result.is_complete());
+
+        // 空文件
+        let result = RecoveryResult {
+            commands: vec![],
+            errors: vec![],
+            total_lines: 0,
+        };
+        assert_eq!(result.success_rate(), 100.0);
+        assert!(result.is_complete());
     }
 }

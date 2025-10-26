@@ -68,32 +68,41 @@
 
 
 
-## Phase 3: AOF Reader 实现（2天）
+## Phase 3: AOF Reader 实现（2天）✅ 已完成
 
 ### 目标
 实现 AOF 读取器，支持逐行读取和容错恢复。
 
 ### 任务清单
-- [ ] 实现 `AofReader` 结构体
-- [ ] 实现 `open()` 方法（打开 AOF 文件）
-- [ ] 实现 `read_next()` 方法（读取下一条命令）
-- [ ] 实现 `recover_all()` 方法（恢复所有命令，容错）
-- [ ] 实现 `RecoveryResult` 结构体（恢复报告）
-- [ ] 添加测试（基本读取、容错恢复、损坏文件处理）
+- [x] 实现 `AofReader` 结构体
+- [x] 实现 `open()` 方法（打开 AOF 文件）
+- [x] 实现 `read_next()` 方法（读取下一条命令）
+- [x] 实现 `recover_all()` 方法（恢复所有命令，容错）
+- [x] 实现 `RecoveryResult` 结构体（恢复报告）
+- [x] 添加测试（基本读取、容错恢复、损坏文件处理）
 
 ### 验收标准
 - ✅ 可以正确读取 AOF 文件
 - ✅ 支持容错恢复（跳过损坏的行）
 - ✅ 提供详细的恢复报告（成功率、错误列表）
-- ✅ 所有测试通过
+- ✅ 所有 8 个 Reader 测试通过（总计 27 个 AOF 测试）
 
-### 关键实现
-```rust
-// AofReader::open() - 打开文件
-// AofReader::read_next() - 逐行读取 JSON
-// AofReader::recover_all() - 容错恢复
-// RecoveryResult - 包含 commands, errors, success_rate
-```
+### 实现亮点
+- 使用 `BufReader` 高效读取
+- 自动跳过空行
+- 容错恢复机制（遇到错误继续读取）
+- `RecoveryResult` 提供详细统计信息
+- 完善的错误处理和文档
+
+### 测试覆盖
+- `test_aof_reader_basic` - 基本读取功能
+- `test_aof_reader_recover_all` - 恢复所有命令
+- `test_aof_reader_empty_file` - 空文件处理
+- `test_aof_reader_file_not_found` - 文件不存在
+- `test_aof_reader_corrupted_file` - 损坏文件容错
+- `test_aof_reader_skip_empty_lines` - 跳过空行
+- `test_aof_reader_write_then_read` - 写入后读取验证
+- `test_recovery_result_success_rate` - 恢复结果统计
 
 ---
 

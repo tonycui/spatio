@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 // 导入 rtree 相关类型
+use crate::rtree::algorithms::aof::{AofCommand, AofConfig, AofWriter};
 use crate::rtree::GeoItem;
 use crate::rtree::RTree;
 
@@ -12,6 +13,9 @@ use crate::rtree::RTree;
 pub struct GeoDatabase {
     // SharedMap: 外层管理collections，内层管理collection数据
     collections: Arc<RwLock<HashMap<String, Arc<RwLock<RTree>>>>>,
+    
+    // AOF Writer (可选)
+    aof_writer: Option<Arc<tokio::sync::Mutex<AofWriter>>>,
 }
 
 impl Default for GeoDatabase {
@@ -24,7 +28,111 @@ impl GeoDatabase {
     pub fn new() -> Self {
         Self {
             collections: Arc::new(RwLock::new(HashMap::new())),
+            aof_writer: None,
         }
+    }
+
+    /// 创建带 AOF 持久化的数据库实例
+    ///
+    /// # 参数
+    /// * `aof_config` - AOF 配置
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::storage::GeoDatabase;
+    /// use spatio::rtree::algorithms::aof::AofConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// let config = AofConfig::new(PathBuf::from("data/appendonly.aof"));
+    /// let db = GeoDatabase::with_aof(config).unwrap();
+    /// ```
+    pub fn with_aof(aof_config: AofConfig) -> crate::Result<Self> {
+        let writer = AofWriter::new(aof_config)?;
+
+        Ok(Self {
+            collections: Arc::new(RwLock::new(HashMap::new())),
+            aof_writer: Some(Arc::new(tokio::sync::Mutex::new(writer))),
+        })
+    }
+
+    /// 从 AOF 文件恢复数据
+    ///
+    /// 此方法会读取 AOF 文件中的所有命令并重放到数据库中。
+    /// 应该在创建数据库实例后立即调用。
+    ///
+    /// # 参数
+    /// * `aof_path` - AOF 文件路径
+    ///
+    /// # 返回
+    /// 返回恢复的命令数量和错误数量
+    ///
+    /// # 示例
+    /// ```no_run
+    /// use spatio::storage::GeoDatabase;
+    /// use spatio::rtree::algorithms::aof::AofConfig;
+    /// use std::path::PathBuf;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let config = AofConfig::new(PathBuf::from("data/appendonly.aof"));
+    /// let db = GeoDatabase::with_aof(config)?;
+    ///
+    /// // 从 AOF 恢复数据
+    /// let (commands, errors) = db.recover_from_aof(PathBuf::from("data/appendonly.aof")).await?;
+    /// println!("Recovered {} commands, {} errors", commands, errors);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn recover_from_aof(&self, aof_path: std::path::PathBuf) -> crate::Result<(usize, usize)> {
+        use crate::rtree::algorithms::aof::{AofReader, AofCommand};
+
+        // 检查文件是否存在
+        if !aof_path.exists() {
+            return Ok((0, 0));
+        }
+
+        // 打开 AOF Reader
+        let mut reader = AofReader::open(aof_path)?;
+
+        // 恢复所有命令
+        let result = reader.recover_all()?;
+
+        // 重放命令（直接操作数据，不写入 AOF）
+        for cmd in &result.commands {
+            match cmd {
+                AofCommand::Insert {
+                    collection,
+                    key,
+                    geojson,
+                    ..
+                } => {
+                    // 直接插入，不触发 AOF 写入
+                    let coll = self.get_or_create_collection(collection).await;
+                    let mut rtree = coll.write().await;
+                    if !rtree.insert_geojson(key.clone(), geojson) {
+                        eprintln!("⚠️  Failed to recover AOF command: INSERT {} {}", collection, key);
+                    }
+                }
+                AofCommand::Delete {
+                    collection, key, ..
+                } => {
+                    // 直接删除
+                    let collections = self.collections.read().await;
+                    if let Some(coll) = collections.get(collection) {
+                        let coll = coll.clone();
+                        drop(collections);
+                        let mut rtree = coll.write().await;
+                        rtree.delete(key);
+                    }
+                }
+                AofCommand::Drop { collection, .. } => {
+                    // 直接删除 collection
+                    let mut collections = self.collections.write().await;
+                    collections.remove(collection);
+                }
+            }
+        }
+
+        Ok((result.commands.len(), result.errors.len()))
     }
 
     /// 获取或创建collection (异步版本)
@@ -54,12 +162,26 @@ impl GeoDatabase {
 
     /// 异步存储一个对象到指定 Collection
     pub async fn set(&self, collection_id: &str, item_id: &str, geojson_str: &str) -> Result<()> {
-        // 1. 获取或创建collection
+        // 1. 先修改内存（Redis 风格：内存优先）
         let collection = self.get_or_create_collection(collection_id).await;
-
-        // 2. 获取collection的写锁
         let mut rtree = collection.write().await;
-        rtree.insert_geojson(item_id.to_string(), geojson_str);
+        
+        // insert_geojson 内部会验证，如果失败直接返回错误
+        if !rtree.insert_geojson(item_id.to_string(), geojson_str) {
+            return Err("Failed to insert GeoJSON: invalid format or bbox calculation error".into());
+        }
+
+        // 2. 内存插入成功后，再记录 AOF（如果启用）
+        if let Some(aof_writer) = &self.aof_writer {
+            let cmd = AofCommand::insert(
+                collection_id.to_string(),
+                item_id.to_string(),
+                geojson_str.to_string(),
+            );
+
+            let mut writer = aof_writer.lock().await;
+            writer.append(&cmd)?;
+        }
 
         Ok(())
     }
@@ -95,12 +217,24 @@ impl GeoDatabase {
 
         let mut rtree = collection.write().await;
 
-        // 先检查 item 是否存在
+        // 检查 item 是否存在
         let exists = rtree.get(item_id).is_some();
 
         if exists {
-            // 删除操作（rtree.delete 是幂等的，总是返回 true）
+            // 1. 先从内存删除（Redis 风格：内存优先）
             rtree.delete(item_id);
+
+            // 2. 再记录 AOF（如果启用）
+            if let Some(aof_writer) = &self.aof_writer {
+                let cmd = AofCommand::delete(
+                    collection_id.to_string(),
+                    item_id.to_string(),
+                );
+
+                let mut writer = aof_writer.lock().await;
+                writer.append(&cmd)?;
+            }
+
             Ok(true)
         } else {
             Ok(false)
@@ -117,7 +251,7 @@ impl GeoDatabase {
     pub async fn drop_collection(&self, collection_id: &str) -> Result<usize> {
         let mut collections = self.collections.write().await;
 
-        // 获取 collection 以统计项目数量
+        // 1. 先从内存删除并获取统计信息（Redis 风格：内存优先）
         let count = if let Some(collection) = collections.get(collection_id) {
             let rtree = collection.read().await;
             rtree.count()
@@ -127,6 +261,16 @@ impl GeoDatabase {
 
         // 删除 collection
         collections.remove(collection_id);
+
+        // 释放写锁（AOF 写入可能较慢，不需要持有锁）
+        drop(collections);
+
+        // 2. 内存删除成功后，再记录 AOF（如果启用）
+        if let Some(aof_writer) = &self.aof_writer {
+            let cmd = AofCommand::drop(collection_id.to_string());
+            let mut writer = aof_writer.lock().await;
+            writer.append(&cmd)?;
+        }
 
         Ok(count)
     }
@@ -513,5 +657,181 @@ mod tests {
         // // 验证第一个点的坐标
         // assert_eq!(first_point[0], 2.5);
         // assert_eq!(first_point[1], 1.0);
+    }
+
+    // ========================================================================
+    // AOF 集成测试
+    // ========================================================================
+
+    #[tokio::test]
+    async fn test_aof_write_and_recover() {
+        use crate::rtree::algorithms::aof::AofConfig;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        // 1. 创建带 AOF 的数据库并写入数据
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            let point1 = json!({
+                "type": "Point",
+                "coordinates": [116.4, 39.9]
+            });
+
+            let point2 = json!({
+                "type": "Point",
+                "coordinates": [121.5, 31.2]
+            });
+
+            db.set("cities", "beijing", &point1.to_string())
+                .await
+                .unwrap();
+            db.set("cities", "shanghai", &point2.to_string())
+                .await
+                .unwrap();
+
+            // 验证数据已写入
+            assert!(db.get("cities", "beijing").await.unwrap().is_some());
+            assert!(db.get("cities", "shanghai").await.unwrap().is_some());
+        }
+
+        // 2. 创建新的数据库实例并从 AOF 恢复
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            // 恢复数据
+            let (commands, errors) = db.recover_from_aof(aof_path).await.unwrap();
+            assert_eq!(commands, 2);
+            assert_eq!(errors, 0);
+
+            // 验证数据已恢复
+            assert!(db.get("cities", "beijing").await.unwrap().is_some());
+            assert!(db.get("cities", "shanghai").await.unwrap().is_some());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_aof_delete_operation() {
+        use crate::rtree::algorithms::aof::AofConfig;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            let point = json!({
+                "type": "Point",
+                "coordinates": [116.4, 39.9]
+            });
+
+            // 插入和删除
+            db.set("cities", "beijing", &point.to_string())
+                .await
+                .unwrap();
+            assert!(db.delete("cities", "beijing").await.unwrap());
+
+            // 验证已删除
+            assert!(db.get("cities", "beijing").await.unwrap().is_none());
+        }
+
+        // 恢复并验证
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            let (commands, errors) = db.recover_from_aof(aof_path).await.unwrap();
+            assert_eq!(commands, 2); // INSERT + DELETE
+            assert_eq!(errors, 0);
+
+            // 验证数据不存在（已删除）
+            assert!(db.get("cities", "beijing").await.unwrap().is_none());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_aof_drop_collection() {
+        use crate::rtree::algorithms::aof::AofConfig;
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("test.aof");
+
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            let point = json!({
+                "type": "Point",
+                "coordinates": [116.4, 39.9]
+            });
+
+            // 插入数据
+            db.set("cities", "beijing", &point.to_string())
+                .await
+                .unwrap();
+
+            // 删除集合
+            let count = db.drop_collection("cities").await.unwrap();
+            assert_eq!(count, 1);
+        }
+
+        // 恢复并验证
+        {
+            let config = AofConfig::new(aof_path.clone());
+            let db = GeoDatabase::with_aof(config).unwrap();
+
+            let (commands, errors) = db.recover_from_aof(aof_path).await.unwrap();
+            assert_eq!(commands, 2); // INSERT + DROP
+            assert_eq!(errors, 0);
+
+            // 验证集合不存在
+            assert!(db.get("cities", "beijing").await.unwrap().is_none());
+            assert!(db.collection_names().await.is_empty());
+        }
+    }
+
+    #[tokio::test]
+    async fn test_aof_without_aof_enabled() {
+        // 测试不启用 AOF 的情况
+        let db = GeoDatabase::new();
+
+        let point = json!({
+            "type": "Point",
+            "coordinates": [116.4, 39.9]
+        });
+
+        // 应该正常工作，只是不写入 AOF
+        db.set("cities", "beijing", &point.to_string())
+            .await
+            .unwrap();
+        assert!(db.get("cities", "beijing").await.unwrap().is_some());
+
+        // 删除也应该正常
+        assert!(db.delete("cities", "beijing").await.unwrap());
+        assert!(db.get("cities", "beijing").await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_aof_recover_nonexistent_file() {
+        use crate::rtree::algorithms::aof::AofConfig;
+        use std::path::PathBuf;
+
+        let config = AofConfig::new(PathBuf::from("nonexistent.aof"));
+        let db = GeoDatabase::with_aof(config).unwrap();
+
+        // 恢复不存在的文件应该返回 (0, 0)
+        let (commands, errors) = db
+            .recover_from_aof(PathBuf::from("nonexistent.aof"))
+            .await
+            .unwrap();
+        assert_eq!(commands, 0);
+        assert_eq!(errors, 0);
     }
 }

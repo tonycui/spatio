@@ -106,34 +106,46 @@
 
 ---
 
-## Phase 4: 集成到 Storage（2-3天）
+## Phase 4: 集成到 Storage（2-3天）✅ 已完成
 
 ### 目标
 将 AOF 系统集成到现有的 `Storage` 层，实现自动记录和启动恢复。
 
 ### 任务清单
-- [ ] 修改 `Storage` 结构体（添加 `aof_writer` 字段）
-- [ ] 实现 `Storage::with_aof_config()` 构造函数
-- [ ] 修改 `insert()` 方法（先记录 AOF，再执行插入）
-- [ ] 修改 `delete()` 方法（记录 AOF）
-- [ ] 修改 `drop()` 方法（记录 AOF）
-- [ ] 实现 `Storage::recover_from_aof()` 方法（启动时恢复）
-- [ ] 在 `rtree/algorithms/mod.rs` 中导出 AOF 模块
-- [ ] 添加集成测试
+- [x] 修改 `Storage` 结构体（添加 `aof_writer` 字段）
+- [x] 实现 `Storage::with_aof_config()` 构造函数
+- [x] 修改 `insert()` 方法（~~先记录 AOF，再执行插入~~ **改为先内存后 AOF，Redis 风格**）
+- [x] 修改 `delete()` 方法（记录 AOF，**先内存后 AOF**）
+- [x] 修改 `drop()` 方法（记录 AOF，**先内存后 AOF + 提前释放锁**）
+- [x] 实现 `Storage::recover_from_aof()` 方法（启动时恢复）
+- [x] 在 `rtree/algorithms/mod.rs` 中导出 AOF 模块
+- [x] 添加集成测试
+- [x] **额外改进：`insert_geojson()` 返回 `bool` 支持验证**
+- [x] **额外改进：移除 AOF 命令中的冗余 `bbox` 字段**
 
 ### 验收标准
-- ✅ `insert`/`delete`/`drop` 操作自动记录到 AOF
+- ✅ `set`/`delete`/`drop` 操作自动记录到 AOF
 - ✅ 服务启动时能从 AOF 恢复数据
-- ✅ AOF 写入失败不影响操作执行（可配置）
-- ✅ 集成测试通过
+- ✅ **AOF 写入失败不影响内存操作（先内存后 AOF 策略）**
+- ✅ 所有 193 个测试通过（远超预期的 31 个）
 
-### 关键实现
-```rust
-// Storage::with_aof_config() - 初始化 AOF Writer
-// Storage::insert() - 先 AOF 后执行
-// Storage::recover_from_aof() - 启动恢复
-// 错误处理: AOF 失败时如何处理？
-```
+### 实现亮点
+- 在 `GeoDatabase` 中添加 `Option<Arc<Mutex<AofWriter>>>` 字段
+- `with_aof()` 构造函数支持创建带持久化的数据库
+- **所有写操作采用 Redis 风格：先内存后 AOF**
+- **`insert_geojson()` 返回 `bool` 支持内置验证**
+- **移除 AOF 命令中的冗余 `bbox` 字段**
+- `drop_collection()` 提前释放锁，提高并发性能
+- `recover_from_aof()` 方法支持启动恢复
+- 恢复时直接操作数据，避免重复写入 AOF
+- 完全向后兼容（不使用 AOF 时功能不变）
+
+### 测试覆盖
+- `test_aof_write_and_recover` - 写入和恢复验证
+- `test_aof_delete_operation` - DELETE 操作持久化
+- `test_aof_drop_collection` - DROP 操作持久化
+- `test_aof_without_aof_enabled` - 无 AOF 模式兼容性
+- `test_aof_recover_nonexistent_file` - 恢复不存在文件的容错
 
 ---
 

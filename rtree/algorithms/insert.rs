@@ -9,25 +9,40 @@ use super::utils::geometry_to_bbox;
 /// 插入操作相关算法
 impl RTree {
     /// 插入新的数据条目 - 遵循论文Algorithm Insert
-    pub fn insert_geojson(&mut self, data: String, geojson_str: &str) {
+    /// 
+    /// # 返回值
+    /// - `true` - 插入成功
+    /// - `false` - 插入失败（GeoJSON 无效或 bbox 计算失败）
+    pub fn insert_geojson(&mut self, data: String, geojson_str: &str) -> bool {
         println!(
             "🔍 insert_geojson called with data: {}, geojson_str: {}",
             data, geojson_str
         );
 
+        // 如果 key 已存在，先删除
         if self.geometry_map.contains_key(&data) || self.geojson_map.contains_key(&data) {
             self.delete(&data);
         }
-        let geometry = geojson_to_geometry(geojson_str).unwrap();
 
-        let rect = match geometry_to_bbox(&geometry) {
-            Ok(bbox) => bbox,
+        // 解析 GeoJSON（可能失败）
+        let geometry = match geojson_to_geometry(geojson_str) {
+            Ok(g) => g,
             Err(e) => {
-                eprintln!("Error calculating bounding box: {}", e);
-                return;
+                eprintln!("❌ Failed to parse GeoJSON: {}", e);
+                return false;
             }
         };
 
+        // 计算边界框（可能失败）
+        let rect = match geometry_to_bbox(&geometry) {
+            Ok(bbox) => bbox,
+            Err(e) => {
+                eprintln!("❌ Failed to calculate bounding box: {}", e);
+                return false;
+            }
+        };
+
+        // 插入到 R-tree
         self.insert(rect, data.clone());
         self.geometry_map.insert(data.clone(), geometry);
         self.geojson_map
@@ -37,6 +52,8 @@ impl RTree {
             "🔍 Stored in geojson_map: {}",
             self.geojson_map.get(&data).unwrap()
         );
+
+        true
     }
 
     // /// 插入新的数据条目 - 遵循论文Algorithm Insert

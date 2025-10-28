@@ -139,8 +139,6 @@ pub enum AofCommand {
         collection: String,
         /// 对象 key
         key: String,
-        /// 边界框 [min_x, min_y, max_x, max_y]
-        bbox: [f64; 4],
         /// GeoJSON 数据
         geojson: String,
     },
@@ -153,8 +151,6 @@ pub enum AofCommand {
         collection: String,
         /// 对象 key
         key: String,
-        /// 边界框 [min_x, min_y, max_x, max_y]
-        bbox: [f64; 4],
     },
 
     /// 删除集合命令
@@ -198,19 +194,16 @@ impl AofCommand {
     /// # 参数
     /// * `collection` - 集合名称
     /// * `key` - 对象 key
-    /// * `bbox` - 边界框 [min_x, min_y, max_x, max_y]
     /// * `geojson` - GeoJSON 数据
     pub fn insert(
         collection: String,
         key: String,
-        bbox: [f64; 4],
         geojson: String,
     ) -> Self {
         Self::Insert {
             ts: Self::now(),
             collection,
             key,
-            bbox,
             geojson,
         }
     }
@@ -220,13 +213,11 @@ impl AofCommand {
     /// # 参数
     /// * `collection` - 集合名称
     /// * `key` - 对象 key
-    /// * `bbox` - 边界框 [min_x, min_y, max_x, max_y]
-    pub fn delete(collection: String, key: String, bbox: [f64; 4]) -> Self {
+    pub fn delete(collection: String, key: String) -> Self {
         Self::Delete {
             ts: Self::now(),
             collection,
             key,
-            bbox,
         }
     }
 
@@ -325,7 +316,7 @@ impl AofWriter {
     /// let cmd = AofCommand::insert(
     ///     "cities".to_string(),
     ///     "beijing".to_string(),
-    ///     [116.0, 39.0, 117.0, 40.0],
+    ///     
     ///     r#"{"type":"Point"}"#.to_string(),
     /// );
     ///
@@ -603,7 +594,6 @@ mod tests {
         let cmd = AofCommand::insert(
             "cities".to_string(),
             "beijing".to_string(),
-            [116.0, 39.0, 117.0, 40.0],
             r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
         );
 
@@ -617,7 +607,6 @@ mod tests {
         let cmd = AofCommand::delete(
             "cities".to_string(),
             "beijing".to_string(),
-            [116.0, 39.0, 117.0, 40.0],
         );
 
         assert!(matches!(cmd, AofCommand::Delete { .. }));
@@ -639,7 +628,6 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
             "{}".to_string(),
         );
 
@@ -650,7 +638,6 @@ mod tests {
         assert!(json.contains(r#""cmd":"INSERT""#));
         assert!(json.contains(r#""collection":"test""#));
         assert!(json.contains(r#""key":"key1""#));
-        assert!(json.contains(r#""bbox""#));
         assert!(json.contains(r#""geojson""#));
         assert!(json.contains(r#""ts""#));
 
@@ -661,7 +648,7 @@ mod tests {
 
     #[test]
     fn test_aof_command_json_deserialization() {
-        let json = r#"{"cmd":"INSERT","ts":1698234567890123456,"collection":"cities","key":"beijing","bbox":[116.0,39.0,117.0,40.0],"geojson":"{\"type\":\"Point\",\"coordinates\":[116.4,39.9]}"}"#;
+        let json = r#"{"cmd":"INSERT","ts":1698234567890123456,"collection":"cities","key":"beijing","geojson":"{\"type\":\"Point\",\"coordinates\":[116.4,39.9]}"}"#;
 
         let cmd: AofCommand = serde_json::from_str(json).unwrap();
 
@@ -671,13 +658,11 @@ mod tests {
 
         if let AofCommand::Insert {
             key,
-            bbox,
             geojson,
             ..
         } = cmd
         {
             assert_eq!(key, "beijing");
-            assert_eq!(bbox, [116.0, 39.0, 117.0, 40.0]);
             assert!(geojson.contains("Point"));
         }
     }
@@ -688,10 +673,10 @@ mod tests {
             AofCommand::insert(
                 "test".to_string(),
                 "key1".to_string(),
-                [0.0, 0.0, 1.0, 1.0],
+                
                 "{}".to_string(),
             ),
-            AofCommand::delete("test".to_string(), "key1".to_string(), [0.0, 0.0, 1.0, 1.0]),
+            AofCommand::delete("test".to_string(), "key1".to_string()),
             AofCommand::drop("test".to_string()),
         ];
 
@@ -759,7 +744,7 @@ mod tests {
         let cmd1 = AofCommand::insert(
             "cities".to_string(),
             "beijing".to_string(),
-            [116.0, 39.0, 117.0, 40.0],
+            
             r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
         );
         writer.append(&cmd1).unwrap();
@@ -767,7 +752,7 @@ mod tests {
         let cmd2 = AofCommand::delete(
             "cities".to_string(),
             "beijing".to_string(),
-            [116.0, 39.0, 117.0, 40.0],
+            
         );
         writer.append(&cmd2).unwrap();
 
@@ -797,7 +782,7 @@ mod tests {
             let cmd = AofCommand::insert(
                 "test".to_string(),
                 format!("key{}", i),
-                [0.0, 0.0, 1.0, 1.0],
+                
                 "{}".to_string(),
             );
             writer.append(&cmd).unwrap();
@@ -829,7 +814,7 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
+            
             "{}".to_string(),
         );
 
@@ -854,7 +839,7 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
+            
             "{}".to_string(),
         );
 
@@ -882,7 +867,7 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
+            
             "{}".to_string(),
         );
 
@@ -909,7 +894,7 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
+            
             "{}".to_string(),
         );
 
@@ -946,7 +931,7 @@ mod tests {
             let cmd = AofCommand::insert(
                 "test".to_string(),
                 "key1".to_string(),
-                [0.0, 0.0, 1.0, 1.0],
+                
                 "{}".to_string(),
             );
 
@@ -970,7 +955,7 @@ mod tests {
         let cmd = AofCommand::insert(
             "test".to_string(),
             "key1".to_string(),
-            [0.0, 0.0, 1.0, 1.0],
+            
             "{}".to_string(),
         );
 
@@ -997,7 +982,7 @@ mod tests {
             let cmd1 = AofCommand::insert(
                 "cities".to_string(),
                 "beijing".to_string(),
-                [116.0, 39.0, 117.0, 40.0],
+                
                 r#"{"type":"Point"}"#.to_string(),
             );
             writer.append(&cmd1).unwrap();
@@ -1005,7 +990,6 @@ mod tests {
             let cmd2 = AofCommand::delete(
                 "cities".to_string(),
                 "shanghai".to_string(),
-                [121.0, 31.0, 122.0, 32.0],
             );
             writer.append(&cmd2).unwrap();
 
@@ -1046,7 +1030,7 @@ mod tests {
                 let cmd = AofCommand::insert(
                     "test".to_string(),
                     format!("key{}", i),
-                    [0.0, 0.0, 1.0, 1.0],
+                    
                     "{}".to_string(),
                 );
                 writer.append(&cmd).unwrap();
@@ -1101,7 +1085,7 @@ mod tests {
             let cmd1 = AofCommand::insert(
                 "test".to_string(),
                 "key1".to_string(),
-                [0.0, 0.0, 1.0, 1.0],
+                
                 "{}".to_string(),
             );
             writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
@@ -1138,7 +1122,7 @@ mod tests {
             let cmd1 = AofCommand::insert(
                 "test".to_string(),
                 "key1".to_string(),
-                [0.0, 0.0, 1.0, 1.0],
+                
                 "{}".to_string(),
             );
             writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
@@ -1149,7 +1133,7 @@ mod tests {
             let cmd2 = AofCommand::delete(
                 "test".to_string(),
                 "key2".to_string(),
-                [0.0, 0.0, 1.0, 1.0],
+                
             );
             writeln!(file, "{}", serde_json::to_string(&cmd2).unwrap()).unwrap();
 
@@ -1175,19 +1159,16 @@ mod tests {
             AofCommand::insert(
                 "cities".to_string(),
                 "beijing".to_string(),
-                [116.0, 39.0, 117.0, 40.0],
                 r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
             ),
             AofCommand::insert(
                 "cities".to_string(),
                 "shanghai".to_string(),
-                [121.0, 31.0, 122.0, 32.0],
                 r#"{"type":"Point","coordinates":[121.5,31.2]}"#.to_string(),
             ),
             AofCommand::delete(
                 "cities".to_string(),
                 "beijing".to_string(),
-                [116.0, 39.0, 117.0, 40.0],
             ),
             AofCommand::drop("cities".to_string()),
         ];

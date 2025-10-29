@@ -258,7 +258,7 @@ impl AofWriter {
     /// - 如果无法创建目录或打开文件，返回 IO 错误
     ///
     /// # 示例
-    /// ```
+    /// ```no_run
     /// use spatio::rtree::algorithms::aof::{AofConfig, AofWriter};
     /// use std::path::PathBuf;
     ///

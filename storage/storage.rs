@@ -800,17 +800,19 @@ mod tests {
     #[tokio::test]
     async fn test_aof_recover_nonexistent_file() {
         use crate::rtree::algorithms::aof::AofConfig;
-        use std::path::PathBuf;
+        use tempfile::TempDir;
 
-        let config = AofConfig::new(PathBuf::from("nonexistent.aof"));
+        let temp_dir = TempDir::new().unwrap();
+        let aof_path = temp_dir.path().join("nonexistent.aof");
+
+        let config = AofConfig::new(aof_path.clone());
         let db = GeoDatabase::with_aof(config).unwrap();
 
         // 恢复不存在的文件应该返回 (0, 0)
-        let (commands, errors) = db
-            .recover_from_aof(PathBuf::from("nonexistent.aof"))
-            .await
-            .unwrap();
+        let (commands, errors) = db.recover_from_aof(aof_path).await.unwrap();
         assert_eq!(commands, 0);
         assert_eq!(errors, 0);
+
+        // temp_dir 离开作用域时自动删除
     }
 }

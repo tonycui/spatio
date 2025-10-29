@@ -1,0 +1,54 @@
+# Spatio 数据库默认配置
+# 此文件定义了所有配置项的默认值
+
+[server]
+# 监听地址
+host = "127.0.0.1"
+
+# 监听端口
+port = 6379
+
+# 最大并发连接数
+max_connections = 10000
+
+# 请求超时时间（秒）
+timeout = 30
+
+[storage]
+# 数据存储目录
+data_dir = "./data"
+
+# R-tree 节点最大子节点数
+max_children = 10
+
+[aof]
+# 是否启用 AOF 持久化
+enabled = true
+
+# AOF 文件路径
+filename = "./data/appendonly.aof"
+
+# 同步策略：
+#   - always:    每次写入都立即同步到磁盘（最安全，性能最低）
+#   - everysec:  每秒同步一次（推荐，平衡性能和安全性）
+#   - no:        由操作系统决定何时同步（性能最高，可能丢失数据）
+sync_policy = "everysec"
+
+# 是否启用 AOF 自动重写（压缩）
+auto_rewrite_enabled = true
+
+# AOF 文件达到此大小（MB）时触发重写
+auto_rewrite_min_size = 64
+
+# AOF 文件增长超过此百分比时触发重写
+auto_rewrite_percentage = 100
+
+[logging]
+# 日志级别：trace, debug, info, warn, error
+level = "info"
+
+# 日志输出：stdout 或 file
+output = "stdout"
+
+# 日志文件路径（当 output = "file" 时需要设置）
+# log_file = "./logs/spatio.log"

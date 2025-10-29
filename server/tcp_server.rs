@@ -4,23 +4,23 @@ use tracing::{error, info};
 
 use crate::server::ServerConnection;
 use crate::storage::GeoDatabase;
-use crate::{Config, Result};
+use crate::{Result, SpatioConfig};
 
 pub struct TcpServer {
-    config: Config,
+    config: SpatioConfig,
     database: Arc<GeoDatabase>,
 }
 
 impl TcpServer {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: SpatioConfig, database: GeoDatabase) -> Self {
         Self {
             config,
-            database: Arc::new(GeoDatabase::new()),
+            database: Arc::new(database),
         }
     }
 
     pub async fn start(&self) -> Result<()> {
-        let addr = format!("{}:{}", self.config.host, self.config.port);
+        let addr = format!("{}:{}", self.config.server.host, self.config.server.port);
         let listener = TcpListener::bind(&addr).await?;
 
         info!("Spatio server listening on {}", addr);

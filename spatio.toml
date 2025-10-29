@@ -1,0 +1,21 @@
+[server]
+host = "127.0.0.1"
+port = 6379
+max_connections = 10000
+timeout = 30
+
+[storage]
+data_dir = "./data"
+max_children = 10
+
+[aof]
+enabled = true
+filename = "./data/appendonly.aof"
+sync_policy = "everysec"
+auto_rewrite_enabled = true
+auto_rewrite_min_size = 64
+auto_rewrite_percentage = 100
+
+[logging]
+level = "info"
+output = "stdout"

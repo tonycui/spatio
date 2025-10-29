@@ -71,6 +71,10 @@ Spatio is a high-performance geospatial database developed in Rust, designed for
 - [ ] AOF rewrite
 - [ ] AOF file lock : to prevent 2 processes write to the same file
 - [ ] start with AOF log
+- [ ] auto_rewrite_enabled
+- [ ] auto_rewrite_min_size
+- [ ] auto_rewrite_percentage
+- [ ] sync_policy: everysecond,no
 
 ### Phase 3: Clustering and Distribution
 > Goal: Provide scalable distributed clusters  

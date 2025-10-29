@@ -55,33 +55,7 @@ impl GeoDatabase {
         })
     }
 
-    /// 从 AOF 文件恢复数据
-    ///
-    /// 此方法会读取 AOF 文件中的所有命令并重放到数据库中。
-    /// 应该在创建数据库实例后立即调用。
-    ///
-    /// # 参数
-    /// * `aof_path` - AOF 文件路径
-    ///
-    /// # 返回
-    /// 返回恢复的命令数量和错误数量
-    ///
-    /// # 示例
-    /// ```no_run
-    /// use spatio::storage::GeoDatabase;
-    /// use spatio::rtree::algorithms::aof::AofConfig;
-    /// use std::path::PathBuf;
-    ///
-    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
-    /// let config = AofConfig::new(PathBuf::from("data/appendonly.aof"));
-    /// let db = GeoDatabase::with_aof(config)?;
-    ///
-    /// // 从 AOF 恢复数据
-    /// let (commands, errors) = db.recover_from_aof(PathBuf::from("data/appendonly.aof")).await?;
-    /// println!("Recovered {} commands, {} errors", commands, errors);
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// 从 AOF 文件恢复数据，返回 (命令数, 错误数)
     pub async fn recover_from_aof(
         &self,
         aof_path: std::path::PathBuf,

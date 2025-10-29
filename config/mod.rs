@@ -279,9 +279,7 @@ impl SpatioConfig {
 
         // 验证日志文件配置
         if self.logging.output == "file" && self.logging.log_file.is_none() {
-            return Err(
-                "Log output is 'file' but log_file path is not specified".to_string()
-            );
+            return Err("Log output is 'file' but log_file path is not specified".to_string());
         }
 
         // 验证数据目录（尝试创建）
@@ -302,16 +300,10 @@ impl SpatioConfig {
     pub fn print_summary(&self) {
         println!("📋 Spatio Configuration:");
         println!("   Server:      {}:{}", self.server.host, self.server.port);
-        println!(
-            "   Max Connections: {}",
-            self.server.max_connections
-        );
+        println!("   Max Connections: {}", self.server.max_connections);
         println!("   Timeout:     {} seconds", self.server.timeout);
         println!();
-        println!(
-            "   Data Dir:    {}",
-            self.storage.data_dir.display()
-        );
+        println!("   Data Dir:    {}", self.storage.data_dir.display());
         println!("   Max Children: {}", self.storage.max_children);
         println!();
         println!(
@@ -323,10 +315,7 @@ impl SpatioConfig {
             }
         );
         if self.aof.enabled {
-            println!(
-                "   AOF File:    {}",
-                self.aof.filename.display()
-            );
+            println!("   AOF File:    {}", self.aof.filename.display());
             println!("   Sync Policy: {}", self.aof.sync_policy);
             println!(
                 "   Auto Rewrite: {}",

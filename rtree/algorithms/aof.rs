@@ -195,11 +195,7 @@ impl AofCommand {
     /// * `collection` - 集合名称
     /// * `key` - 对象 key
     /// * `geojson` - GeoJSON 数据
-    pub fn insert(
-        collection: String,
-        key: String,
-        geojson: String,
-    ) -> Self {
+    pub fn insert(collection: String, key: String, geojson: String) -> Self {
         Self::Insert {
             ts: Self::now(),
             collection,
@@ -558,10 +554,10 @@ impl AofReader {
 pub struct RecoveryResult {
     /// 成功恢复的命令列表
     pub commands: Vec<AofCommand>,
-    
+
     /// 恢复过程中遇到的错误列表
     pub errors: Vec<AofError>,
-    
+
     /// 总行数（包括空行）
     pub total_lines: usize,
 }
@@ -604,10 +600,7 @@ mod tests {
 
     #[test]
     fn test_aof_command_delete_creation() {
-        let cmd = AofCommand::delete(
-            "cities".to_string(),
-            "beijing".to_string(),
-        );
+        let cmd = AofCommand::delete("cities".to_string(), "beijing".to_string());
 
         assert!(matches!(cmd, AofCommand::Delete { .. }));
         assert_eq!(cmd.collection(), "cities");
@@ -625,11 +618,7 @@ mod tests {
 
     #[test]
     fn test_aof_command_json_serialization() {
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         // 序列化为 JSON
         let json = serde_json::to_string(&cmd).unwrap();
@@ -656,12 +645,7 @@ mod tests {
         assert_eq!(cmd.collection(), "cities");
         assert_eq!(cmd.timestamp(), 1698234567890123456);
 
-        if let AofCommand::Insert {
-            key,
-            geojson,
-            ..
-        } = cmd
-        {
+        if let AofCommand::Insert { key, geojson, .. } = cmd {
             assert_eq!(key, "beijing");
             assert!(geojson.contains("Point"));
         }
@@ -670,12 +654,7 @@ mod tests {
     #[test]
     fn test_aof_command_all_types_serialization() {
         let commands = vec![
-            AofCommand::insert(
-                "test".to_string(),
-                "key1".to_string(),
-                
-                "{}".to_string(),
-            ),
+            AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string()),
             AofCommand::delete("test".to_string(), "key1".to_string()),
             AofCommand::drop("test".to_string()),
         ];
@@ -744,16 +723,11 @@ mod tests {
         let cmd1 = AofCommand::insert(
             "cities".to_string(),
             "beijing".to_string(),
-            
             r#"{"type":"Point","coordinates":[116.4,39.9]}"#.to_string(),
         );
         writer.append(&cmd1).unwrap();
 
-        let cmd2 = AofCommand::delete(
-            "cities".to_string(),
-            "beijing".to_string(),
-            
-        );
+        let cmd2 = AofCommand::delete("cities".to_string(), "beijing".to_string());
         writer.append(&cmd2).unwrap();
 
         writer.flush().unwrap();
@@ -779,12 +753,7 @@ mod tests {
 
         // 写入多条命令
         for i in 0..10 {
-            let cmd = AofCommand::insert(
-                "test".to_string(),
-                format!("key{}", i),
-                
-                "{}".to_string(),
-            );
+            let cmd = AofCommand::insert("test".to_string(), format!("key{}", i), "{}".to_string());
             writer.append(&cmd).unwrap();
         }
 
@@ -806,17 +775,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let aof_path = temp_dir.path().join("test_always.aof");
 
-        let config = AofConfig::new(aof_path.clone())
-            .set_sync_policy(AofSyncPolicy::Always);
+        let config = AofConfig::new(aof_path.clone()).set_sync_policy(AofSyncPolicy::Always);
 
         let mut writer = AofWriter::new(config).unwrap();
 
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         // Always 策略应该立即写入
         writer.append(&cmd).unwrap();
@@ -831,17 +794,11 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let aof_path = temp_dir.path().join("test_everysec.aof");
 
-        let config = AofConfig::new(aof_path.clone())
-            .set_sync_policy(AofSyncPolicy::EverySecond);
+        let config = AofConfig::new(aof_path.clone()).set_sync_policy(AofSyncPolicy::EverySecond);
 
         let mut writer = AofWriter::new(config).unwrap();
 
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         writer.append(&cmd).unwrap();
 
@@ -864,12 +821,7 @@ mod tests {
 
         let mut writer = AofWriter::new(config).unwrap();
 
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         writer.append(&cmd).unwrap();
 
@@ -891,12 +843,7 @@ mod tests {
 
         assert_eq!(writer.bytes_written(), 0);
 
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         writer.append(&cmd).unwrap();
         assert!(writer.bytes_written() > 0);
@@ -928,12 +875,7 @@ mod tests {
             let config = AofConfig::new(aof_path.clone()).set_sync_policy(AofSyncPolicy::No);
             let mut writer = AofWriter::new(config).unwrap();
 
-            let cmd = AofCommand::insert(
-                "test".to_string(),
-                "key1".to_string(),
-                
-                "{}".to_string(),
-            );
+            let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
             writer.append(&cmd).unwrap();
             // writer 在这里被 drop，应该自动 flush
@@ -952,12 +894,7 @@ mod tests {
         let config = AofConfig::new(nested_path.clone());
         let mut writer = AofWriter::new(config).unwrap();
 
-        let cmd = AofCommand::insert(
-            "test".to_string(),
-            "key1".to_string(),
-            
-            "{}".to_string(),
-        );
+        let cmd = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
 
         writer.append(&cmd).unwrap();
         writer.flush().unwrap();
@@ -982,15 +919,11 @@ mod tests {
             let cmd1 = AofCommand::insert(
                 "cities".to_string(),
                 "beijing".to_string(),
-                
                 r#"{"type":"Point"}"#.to_string(),
             );
             writer.append(&cmd1).unwrap();
 
-            let cmd2 = AofCommand::delete(
-                "cities".to_string(),
-                "shanghai".to_string(),
-            );
+            let cmd2 = AofCommand::delete("cities".to_string(), "shanghai".to_string());
             writer.append(&cmd2).unwrap();
 
             let cmd3 = AofCommand::drop("cities".to_string());
@@ -1027,12 +960,8 @@ mod tests {
             let mut writer = AofWriter::new(config).unwrap();
 
             for i in 0..100 {
-                let cmd = AofCommand::insert(
-                    "test".to_string(),
-                    format!("key{}", i),
-                    
-                    "{}".to_string(),
-                );
+                let cmd =
+                    AofCommand::insert("test".to_string(), format!("key{}", i), "{}".to_string());
                 writer.append(&cmd).unwrap();
             }
 
@@ -1082,12 +1011,7 @@ mod tests {
             let mut file = File::create(&aof_path).unwrap();
 
             // 有效命令
-            let cmd1 = AofCommand::insert(
-                "test".to_string(),
-                "key1".to_string(),
-                
-                "{}".to_string(),
-            );
+            let cmd1 = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
             writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
 
             // 损坏的 JSON
@@ -1119,22 +1043,13 @@ mod tests {
         {
             let mut file = File::create(&aof_path).unwrap();
 
-            let cmd1 = AofCommand::insert(
-                "test".to_string(),
-                "key1".to_string(),
-                
-                "{}".to_string(),
-            );
+            let cmd1 = AofCommand::insert("test".to_string(), "key1".to_string(), "{}".to_string());
             writeln!(file, "{}", serde_json::to_string(&cmd1).unwrap()).unwrap();
 
             writeln!(file).unwrap(); // 空行
             writeln!(file).unwrap(); // 空行
 
-            let cmd2 = AofCommand::delete(
-                "test".to_string(),
-                "key2".to_string(),
-                
-            );
+            let cmd2 = AofCommand::delete("test".to_string(), "key2".to_string());
             writeln!(file, "{}", serde_json::to_string(&cmd2).unwrap()).unwrap();
 
             file.flush().unwrap();
@@ -1166,10 +1081,7 @@ mod tests {
                 "shanghai".to_string(),
                 r#"{"type":"Point","coordinates":[121.5,31.2]}"#.to_string(),
             ),
-            AofCommand::delete(
-                "cities".to_string(),
-                "beijing".to_string(),
-            ),
+            AofCommand::delete("cities".to_string(), "beijing".to_string()),
             AofCommand::drop("cities".to_string()),
         ];
 

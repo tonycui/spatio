@@ -79,10 +79,13 @@ async fn main() -> Result<()> {
             _ => AofSyncPolicy::EverySecond,
         };
 
-        let aof_config = AofWriterConfig::new(config.aof.filename.clone())
-            .set_sync_policy(sync_policy);
+        let aof_config =
+            AofWriterConfig::new(config.aof.filename.clone()).set_sync_policy(sync_policy);
 
-        info!("💾 AOF enabled with sync policy: {}", config.aof.sync_policy);
+        info!(
+            "💾 AOF enabled with sync policy: {}",
+            config.aof.sync_policy
+        );
 
         let db = spatio::storage::GeoDatabase::with_aof(aof_config)?;
 
@@ -90,7 +93,7 @@ async fn main() -> Result<()> {
         if config.aof.filename.exists() {
             info!("📖 Recovering from AOF file...");
             let (commands, errors) = db.recover_from_aof(config.aof.filename.clone()).await?;
-            
+
             if errors > 0 {
                 tracing::warn!("⚠️  Recovered {} commands with {} errors", commands, errors);
             } else {
@@ -104,7 +107,10 @@ async fn main() -> Result<()> {
         spatio::storage::GeoDatabase::new()
     };
 
-    info!("🌐 Server listening on {}:{}", config.server.host, config.server.port);
+    info!(
+        "🌐 Server listening on {}:{}",
+        config.server.host, config.server.port
+    );
     println!();
 
     // 启动服务器（传入配置和数据库实例）
@@ -149,7 +155,11 @@ fn init_logging(config: &spatio::config::LoggingConfig) {
                     .expect("Failed to open log file");
 
                 tracing_subscriber::registry()
-                    .with(tracing_subscriber::fmt::layer().with_writer(file).with_target(false))
+                    .with(
+                        tracing_subscriber::fmt::layer()
+                            .with_writer(file)
+                            .with_target(false),
+                    )
                     .with(tracing_subscriber::filter::LevelFilter::from_level(filter))
                     .init();
             }
@@ -162,4 +172,3 @@ fn init_logging(config: &spatio::config::LoggingConfig) {
         }
     }
 }
-

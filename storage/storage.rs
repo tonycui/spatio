@@ -13,7 +13,7 @@ use crate::rtree::RTree;
 pub struct GeoDatabase {
     // SharedMap: 外层管理collections，内层管理collection数据
     collections: Arc<RwLock<HashMap<String, Arc<RwLock<RTree>>>>>,
-    
+
     // AOF Writer (可选)
     aof_writer: Option<Arc<tokio::sync::Mutex<AofWriter>>>,
 }
@@ -82,8 +82,11 @@ impl GeoDatabase {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn recover_from_aof(&self, aof_path: std::path::PathBuf) -> crate::Result<(usize, usize)> {
-        use crate::rtree::algorithms::aof::{AofReader, AofCommand};
+    pub async fn recover_from_aof(
+        &self,
+        aof_path: std::path::PathBuf,
+    ) -> crate::Result<(usize, usize)> {
+        use crate::rtree::algorithms::aof::{AofCommand, AofReader};
 
         // 检查文件是否存在
         if !aof_path.exists() {
@@ -109,7 +112,10 @@ impl GeoDatabase {
                     let coll = self.get_or_create_collection(collection).await;
                     let mut rtree = coll.write().await;
                     if !rtree.insert_geojson(key.clone(), geojson) {
-                        eprintln!("⚠️  Failed to recover AOF command: INSERT {} {}", collection, key);
+                        eprintln!(
+                            "⚠️  Failed to recover AOF command: INSERT {} {}",
+                            collection, key
+                        );
                     }
                 }
                 AofCommand::Delete {
@@ -165,10 +171,12 @@ impl GeoDatabase {
         // 1. 先修改内存（Redis 风格：内存优先）
         let collection = self.get_or_create_collection(collection_id).await;
         let mut rtree = collection.write().await;
-        
+
         // insert_geojson 内部会验证，如果失败直接返回错误
         if !rtree.insert_geojson(item_id.to_string(), geojson_str) {
-            return Err("Failed to insert GeoJSON: invalid format or bbox calculation error".into());
+            return Err(
+                "Failed to insert GeoJSON: invalid format or bbox calculation error".into(),
+            );
         }
 
         // 2. 内存插入成功后，再记录 AOF（如果启用）
@@ -226,10 +234,7 @@ impl GeoDatabase {
 
             // 2. 再记录 AOF（如果启用）
             if let Some(aof_writer) = &self.aof_writer {
-                let cmd = AofCommand::delete(
-                    collection_id.to_string(),
-                    item_id.to_string(),
-                );
+                let cmd = AofCommand::delete(collection_id.to_string(), item_id.to_string());
 
                 let mut writer = aof_writer.lock().await;
                 writer.append(&cmd)?;

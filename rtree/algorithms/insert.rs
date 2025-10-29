@@ -9,7 +9,7 @@ use super::utils::geometry_to_bbox;
 /// 插入操作相关算法
 impl RTree {
     /// 插入新的数据条目 - 遵循论文Algorithm Insert
-    /// 
+    ///
     /// # 返回值
     /// - `true` - 插入成功
     /// - `false` - 插入失败（GeoJSON 无效或 bbox 计算失败）

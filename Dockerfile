@@ -13,16 +13,11 @@ RUN apt-get update && apt-get install -y \
 # 设置工作目录
 WORKDIR /app
 
-# 复制所有必要文件（因为这是一个库项目，结构特殊）
+# 复制 Cargo 配置文件
 COPY Cargo.toml Cargo.lock ./
-COPY lib.rs ./
-COPY bin ./bin
-COPY client ./client
-COPY commands ./commands
-COPY protocol ./protocol
-COPY rtree ./rtree
-COPY server ./server
-COPY storage ./storage
+
+# 复制所有源代码（排除由 .dockerignore 处理）
+COPY . .
 
 # 构建 release 版本
 RUN cargo build --release --bin spatio-server

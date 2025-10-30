@@ -96,6 +96,11 @@ docker-build: ## 构建 Docker 镜像
 	@echo "$(GREEN)Building Docker image...$(NC)"
 	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 
+docker-build-local: ## 本地测试构建 Docker 镜像（用于验证 CI）
+	@echo "$(GREEN)Building Docker image locally (CI simulation)...$(NC)"
+	@echo "$(YELLOW)This simulates the GitHub Actions build process$(NC)"
+	docker build -t spatio:local-test .
+
 docker-build-no-cache: ## 构建 Docker 镜像（不使用缓存）
 	@echo "$(GREEN)Building Docker image (no cache)...$(NC)"
 	docker build --no-cache -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
